@@ -6,8 +6,8 @@
 |---|---|---|---|
 | PRD/docs | Person C | Not started | Push early |
 | Demo data | Person C | Not started | Synthetic only |
-| Backend API | Person A | Not started | Needs demo endpoint |
-| Vultr inference | Person A | Not started | Core requirement |
+| Backend API | Person A | In progress | Skeleton + `/api/demo-case` done (PR #3) |
+| Vultr inference | Person A | In progress | OpenAI-compatible client stub (PR #3); not yet in live path |
 | Retrieval | Person A | Not started | Needs citations |
 | Fee calculator | Person A | Not started | Deterministic math |
 | Frontend shell | Person B | Not started | Demo-first |
@@ -32,9 +32,9 @@
 
 ### Backend
 
-- [ ] Create API skeleton
-- [ ] Create Vultr inference client
-- [ ] Add demo case endpoint
+- [x] Create API skeleton
+- [x] Create Vultr inference client (stub; not yet wired into a live path)
+- [x] Add demo case endpoint
 - [ ] Add document chunker
 - [ ] Add retrieval tool
 - [ ] Add fee rule extractor
@@ -59,9 +59,9 @@
 
 ### Repo / Submission
 
-- [ ] Public repo
-- [ ] `.env.example`
-- [ ] No `.env` committed
+- [x] Public repo
+- [x] `.env.example`
+- [x] No `.env` committed
 - [ ] README with demo instructions
 - [ ] Sources and acknowledgements
 - [ ] Clear note: all demo docs are synthetic
