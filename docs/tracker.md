@@ -44,7 +44,7 @@ The Harborline Hotel, audit month June vs prior month May.
 - [x] Add retrieval tool (`packages/agent` `retriever.ts`: model-driven chunk selection via a VultronRetriever chat model — injected `RetrieverLlm` boundary; ranks by model score, drops hallucinated indices, tolerant JSON, topK/minScore)
 - [x] Add fee rule extractor (`packages/agent` `ruleExtractor.ts`: HMA chunks → `FeeRules` on a VultronRetriever model — injected LLM boundary, zod-validated envelope; LLM extracts, code normalizes `3.0%`→`0.03` (never computes); each rule cited to its chunk; missing clause omitted not invented; extracted rules feed the calculator to reproduce $36,580)
 - [x] Add deterministic fee calculator
-- [ ] Add anomaly checker
+- [x] Add anomaly checker (`packages/agent` `anomalyChecker.ts`: deterministic June-vs-May comparison — line items summed by `normalizedCategory`, charged fees by `feeType`; flags only when BOTH gates clear (|Δ%| ≥ 50% AND |Δ$| ≥ $5k) so rooms +2%/+$50k stays quiet while centralized services $7,500→$28,000 (+273%) flags high + `triggersReview`, feeding the orchestrator's re-retrieval loop; new items (prior $0) gate on dollars with `percentChange: null`; citations carried from both months)
 - [ ] Add agent orchestrator
 - [ ] Add report generator
 - [ ] Add confidence scoring
