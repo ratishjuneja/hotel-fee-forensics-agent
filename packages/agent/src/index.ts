@@ -15,3 +15,4 @@ export * from "./tools/ruleExtractor.js";
 export * from "./tools/anomalyChecker.js";
 export * from "./tools/caseHistoryRetriever.js";
 export * from "./tools/decisionEngine.js";
+export * from "./tools/reportGenerator.js";
