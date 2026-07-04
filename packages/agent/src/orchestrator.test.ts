@@ -283,8 +283,10 @@ describe("runAudit — golden end-to-end (real data/demo files)", () => {
       "decision_engine",
       "report_generator",
     ]);
+    // Plan/extraction/report are deterministic code (TOOL); the model badges
+    // belong to retrieval — and to the report only when a prose llm is wired.
     expect(result.trace.map((s) => s.kind)).toEqual([
-      "LLM", "LLM", "LLM", "LLM", "TOOL", "TOOL", "LLM", "TOOL", "TOOL", "LLM",
+      "TOOL", "LLM", "LLM", "TOOL", "TOOL", "TOOL", "LLM", "TOOL", "TOOL", "LLM",
     ]);
     // Retrieval happens more than once — the "agent, not single-shot RAG" proof.
     expect(result.trace.filter((s) => s.tool === "retriever")).toHaveLength(3);
@@ -439,39 +441,63 @@ describe("runAudit — stable months (no anomaly, no re-retrieval loop)", () => 
   });
 });
 
-// --- Degraded mode: the model is down, the audit still completes honestly ---------
+// --- VultronRetriever-only: the production configuration (no chat model at all) ----
 
-describe("runAudit — LLM transport failure mid-run", () => {
-  const failingLlm: OrchestratorLlm = async () => {
-    throw new Error("connect ECONNREFUSED (Vultr inference unreachable)");
+describe("runAudit — VultronRetriever-only pipeline (deps = ranker, nothing else)", () => {
+  const ranker = async (query: string, documents: string[]) => {
+    const terms = query.toLowerCase().split(/\W+/).filter((t) => t.length > 2);
+    return documents
+      .map((doc, index) => ({
+        index,
+        score: terms.filter((t) => doc.toLowerCase().includes(t)).length,
+      }))
+      .sort((a, b) => b.score - a.score);
   };
-  const resultPromise = runAudit(harborlineInput(), { llm: failingLlm, now });
+  const resultPromise = runAudit(harborlineInput(), { ranker, now });
 
-  it("completes with deterministic fallbacks instead of failing or inventing", async () => {
+  it("reproduces the full golden answer with the reranker as the only model", async () => {
     const result = await resultPromise;
     expect(result.status).toBe("completed");
-    expect(result.trace).toHaveLength(10); // anomaly loop is deterministic — still runs
-    expect(result.memo.length).toBeGreaterThan(0);
+    expect(result.findings.map((f) => f.suspectedImpact)).toEqual([1980, 6600, 28000]);
+    expect(result.confidence).toBe(0.96);
+    expect(result.warnings).toEqual([]);
+    expect(result.memo).toContain("APPROVAL-0612-03");
+    expect(result.memo).toContain("$36,580");
     expect(result.emailDraft.body).toContain("Meridian Hotel Management");
-    expect(result.warnings.length).toBeGreaterThan(0);
-    expect(result.trace.filter((s) => s.status === "warning").length).toBeGreaterThanOrEqual(4);
   });
 
-  it("routes the unexplained variance to human review — never fabricated findings", async () => {
+  it("badges retrieval as the only model steps — everything else is a TOOL", async () => {
     const result = await resultPromise;
-    // Without extracted rules there is no recompute to assert; the whole charged
-    // variance lands in a single NEEDS_REVIEW finding.
-    expect(result.findings).toHaveLength(1);
-    expect(result.findings[0]).toMatchObject({
-      issueType: "NEEDS_REVIEW",
-      recommendedAction: "human_review",
-      suspectedImpact: 276200,
-    });
+    expect(result.trace.map((s) => s.kind)).toEqual([
+      "TOOL", "LLM", "LLM", "TOOL", "TOOL", "TOOL", "LLM", "TOOL", "TOOL", "TOOL",
+    ]);
+    expect(result.trace.filter((s) => s.tool === "retriever")).toHaveLength(3);
+  });
+});
+
+// --- Degraded mode: every model down, the audit still completes with the numbers ---
+
+describe("runAudit — all model transports failing mid-run", () => {
+  const failing = async (): Promise<never> => {
+    throw new Error("connect ECONNREFUSED (Vultr inference unreachable)");
+  };
+  const resultPromise = runAudit(harborlineInput(), {
+    ranker: failing,
+    llm: failing as OrchestratorLlm,
+    now,
   });
 
-  it("degrades the confidence score and zeroes contract clarity", async () => {
+  it("still lands the golden numbers on deterministic supersets, with honest warnings", async () => {
     const result = await resultPromise;
-    expect(result.confidence).toBeLessThan(0.6);
-    expect(result.confidenceBreakdown![0]!.points).toBe(0);
+    expect(result.status).toBe("completed");
+    expect(result.trace).toHaveLength(10);
+    // Retrieval degrades to the all-clauses superset; extraction and the memo
+    // are deterministic — the answer survives a total inference outage.
+    expect(result.findings.map((f) => f.suspectedImpact)).toEqual([1980, 6600, 28000]);
+    expect(result.confidence).toBe(0.96);
+    expect(result.memo).toContain("$36,580");
+    expect(result.emailDraft.body).toContain("Meridian Hotel Management");
+    expect(result.warnings.length).toBeGreaterThanOrEqual(3);
+    expect(result.trace.filter((s) => s.status === "warning").length).toBeGreaterThanOrEqual(3);
   });
 });

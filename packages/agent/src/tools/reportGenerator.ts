@@ -50,7 +50,13 @@ export interface ReportGeneratorInput {
 }
 
 export interface GenerateReportOptions {
-  llm: ReportLlm;
+  /**
+   * Optional prose polish. Omit (the VultronRetriever-only pipeline) and the
+   * deterministic templates ARE the prose — that is a mode, not a degradation,
+   * so it emits no warnings. When wired, the model may improve the executive
+   * summary and email body, still policed by the number guard.
+   */
+  llm?: ReportLlm | null;
   /** Injectable clock for deterministic tests. */
   now?: () => string;
   /** Truncate each finding summary in the prompt (default 500 chars). */
@@ -444,39 +450,42 @@ export async function generateReport(
   let executiveSummary = fallbackSummary(input, totals, window);
   let emailBody = fallbackEmailBody(input, totals, window);
 
-  try {
-    const raw = await options.llm(buildMessages(context));
-    const prose = parseProse(raw);
-    if (!prose) {
-      warnings.push(
-        "Report prose: model output was not valid JSON — deterministic templates used.",
-      );
-    } else {
-      const summaryInvented = findInventedAmount(prose.executiveSummary, allowed);
-      if (summaryInvented) {
+  // No llm wired → the templates ARE the prose (a mode, not a degradation).
+  if (options.llm) {
+    try {
+      const raw = await options.llm(buildMessages(context));
+      const prose = parseProse(raw);
+      if (!prose) {
         warnings.push(
-          `Executive summary: model introduced $${summaryInvented}, which is not in the ` +
-            "audit context — deterministic template used (the model never computes).",
+          "Report prose: model output was not valid JSON — deterministic templates used.",
         );
       } else {
-        executiveSummary = prose.executiveSummary.trim();
-      }
+        const summaryInvented = findInventedAmount(prose.executiveSummary, allowed);
+        if (summaryInvented) {
+          warnings.push(
+            `Executive summary: model introduced $${summaryInvented}, which is not in the ` +
+              "audit context — deterministic template used (the model never computes).",
+          );
+        } else {
+          executiveSummary = prose.executiveSummary.trim();
+        }
 
-      const emailInvented = findInventedAmount(prose.emailBody, allowed);
-      if (emailInvented) {
-        warnings.push(
-          `Dispute email: model introduced $${emailInvented}, which is not in the ` +
-            "audit context — deterministic template used (the model never computes).",
-        );
-      } else {
-        emailBody = prose.emailBody.trim();
+        const emailInvented = findInventedAmount(prose.emailBody, allowed);
+        if (emailInvented) {
+          warnings.push(
+            `Dispute email: model introduced $${emailInvented}, which is not in the ` +
+              "audit context — deterministic template used (the model never computes).",
+          );
+        } else {
+          emailBody = prose.emailBody.trim();
+        }
       }
+    } catch (err) {
+      warnings.push(
+        `Report prose: model call failed (${err instanceof Error ? err.message : "unknown error"}) ` +
+          "— deterministic templates used.",
+      );
     }
-  } catch (err) {
-    warnings.push(
-      `Report prose: model call failed (${err instanceof Error ? err.message : "unknown error"}) ` +
-        "— deterministic templates used.",
-    );
   }
 
   const subject =

@@ -406,3 +406,148 @@ export async function extractFeeRules(
 
   return { rules, warnings };
 }
+
+// --- Deterministic extraction (no model) --------------------------------------
+
+/**
+ * Code-only clause parsing for the VultronRetriever-only pipeline: the
+ * hackathon requires the sponsor's retrieval models as the sole reasoning
+ * engine, and they score documents — they cannot generate JSON. So retrieval
+ * (a VultronRetriever reranker) picks the clauses and this parser transcribes
+ * them: rates from "(3.0%)"-style parentheticals, thresholds from dollar
+ * figures, the audit window from "(12) months", exclusions from the synonym
+ * map over the exclusions clause. Nothing is ever guessed — a clause without
+ * a parseable value is omitted with a warning, exactly like the model path.
+ */
+
+const findClause = (
+  chunks: DocumentChunk[],
+  labelPattern: RegExp,
+  textPattern: RegExp,
+): DocumentChunk | undefined =>
+  chunks.find((c) => labelPattern.test(c.citationLabel)) ??
+  chunks.find((c) => textPattern.test(c.text));
+
+const normalizeClauseText = (text: string): string => text.replace(/\s+/g, " ").trim();
+
+/** First "(3.0%)" / "3.0%" style rate in the clause, as written (percent units). */
+const parseRatePercent = (text: string): number | null => {
+  const match = text.match(/(\d+(?:\.\d+)?)\s*%/);
+  return match ? Number(match[1]) : null;
+};
+
+/** First dollar figure in the clause, e.g. "($10,000)" → 10000. */
+const parseDollars = (text: string): number | null => {
+  const match = text.match(/\$\s*([\d,]+(?:\.\d+)?)/);
+  return match ? Number(match[1]!.replace(/,/g, "")) : null;
+};
+
+const clauseCitation = (chunk: DocumentChunk, documentName: string): Citation => ({
+  documentId: chunk.documentId,
+  documentName,
+  chunkId: chunk.id,
+  sectionLabel: chunk.sectionLabel ?? chunk.citationLabel,
+  quote: normalizeClauseText(chunk.text).slice(0, 200),
+});
+
+export function extractFeeRulesDeterministic(
+  chunks: DocumentChunk[],
+  options: { documentName: string },
+): ExtractFeeRulesResult {
+  const warnings: string[] = [];
+  const rules: FeeRules = {};
+  if (chunks.length === 0) {
+    warnings.push("No document chunks provided — no fee rules extracted.");
+    return { rules, warnings };
+  }
+
+  const excludedCategories = exclusionClauseCategories(chunks);
+
+  // Base management fee
+  const baseClause = findClause(chunks, /base management fee/i, /base management fee/i);
+  const baseText = baseClause ? normalizeClauseText(baseClause.text) : "";
+  const baseRate = parseRatePercent(baseText);
+  const baseRevenue = baseText.match(
+    /(Total Operating Revenue|Gross Revenues?|Total Revenues?)/i,
+  );
+  if (baseClause && baseRate != null && baseRevenue) {
+    rules.baseManagementFee = {
+      percentage: toFraction(baseRate),
+      revenueBase: baseRevenue[1]!,
+      excludedRevenue: [],
+      ...(excludedCategories.length > 0 ? { excludedCategories } : {}),
+      citation: clauseCitation(baseClause, options.documentName),
+    };
+  } else {
+    warnings.push(
+      baseClause
+        ? "base management fee: clause found but rate/revenue base not parseable — omitted."
+        : "base management fee: clause not found in the agreement.",
+    );
+  }
+
+  // Incentive fee
+  const incentiveClause = findClause(chunks, /incentive/i, /incentive (management )?fee/i);
+  const incentiveText = incentiveClause ? normalizeClauseText(incentiveClause.text) : "";
+  const incentiveRate = parseRatePercent(incentiveText);
+  const metric = incentiveText.match(/\b(AGOP|GOP|NOI)\b/);
+  if (incentiveClause && incentiveRate != null && metric) {
+    rules.incentiveFee = {
+      percentage: toFraction(incentiveRate),
+      profitMetric: metric[1] as "GOP" | "AGOP" | "NOI",
+      excludedItems: [],
+      ...(excludedCategories.length > 0 ? { excludedCategories } : {}),
+      citation: clauseCitation(incentiveClause, options.documentName),
+    };
+  } else {
+    warnings.push(
+      incentiveClause
+        ? "incentive fee: clause found but rate/profit metric not parseable — omitted."
+        : "incentive fee: clause not found in the agreement.",
+    );
+  }
+
+  // Pass-through / centralized-services approval threshold
+  const passClause = findClause(
+    chunks,
+    /centralized|pass-?through|reimbursab/i,
+    /centralized services|pass-?through/i,
+  );
+  const threshold = passClause ? parseDollars(normalizeClauseText(passClause.text)) : null;
+  if (passClause && threshold != null) {
+    rules.passThroughRules = {
+      allowedCategories: [],
+      excludedCategories: [],
+      approvalThreshold: threshold,
+      citation: clauseCitation(passClause, options.documentName),
+    };
+  } else {
+    warnings.push(
+      passClause
+        ? "pass-through rules: clause found but no dollar threshold parseable — omitted."
+        : "pass-through rules: clause not found in the agreement.",
+    );
+  }
+
+  // Audit rights window: "(12) months" → days on a 365-day year.
+  const auditClause = findClause(chunks, /audit/i, /audit\b.*\bmonths?/i);
+  const months = auditClause
+    ? normalizeClauseText(auditClause.text).match(/\((\d+)\)\s*months?/i)
+    : null;
+  if (auditClause && months) {
+    rules.auditRights = {
+      exists: true,
+      correctionWindowDays: Math.round((Number(months[1]) * 365) / 12),
+      citation: clauseCitation(auditClause, options.documentName),
+    };
+  } else if (auditClause) {
+    rules.auditRights = {
+      exists: true,
+      citation: clauseCitation(auditClause, options.documentName),
+    };
+  } else {
+    warnings.push("audit rights: clause not found in the agreement.");
+  }
+
+  return { rules, warnings };
+}

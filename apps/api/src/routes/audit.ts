@@ -2,7 +2,6 @@ import type { FastifyInstance } from "fastify";
 import {
   runAudit,
   type ChunkRanker,
-  type OrchestratorLlm,
   type RunAuditResult,
 } from "@feeforensics/agent";
 import type { AuditReport } from "@feeforensics/shared";
@@ -15,17 +14,12 @@ interface CaseParams {
 
 export interface AuditRouteOptions {
   /**
-   * LLM transport handed to the agent. `null` means Vultr inference is not
-   * configured — run-audit fails loudly with 503 rather than returning a
-   * degraded audit that looks real. (Transient failures DURING a run are a
-   * different case: the orchestrator degrades those to cited fallbacks +
-   * warnings, so a mid-demo inference hiccup never 500s.)
-   */
-  llm: OrchestratorLlm | null;
-  /**
-   * Retrieval transport: a VultronRetriever model on /v1/rerank. When present,
-   * all retrieval steps run on it (the primary-workflow requirement); null
-   * degrades retrieval to chat-model selection inside the agent.
+   * The pipeline's ONE model: a VultronRetriever flavor on Vultr's /v1/rerank
+   * scoring every retrieval step. `null` means it is not configured —
+   * run-audit fails loudly with 503 rather than returning an audit that never
+   * touched Vultr. (Transient failures DURING a run are a different case: the
+   * orchestrator degrades those to deterministic supersets + warnings, so a
+   * mid-demo inference hiccup never 500s.)
    */
   ranker: ChunkRanker | null;
 }
@@ -62,18 +56,17 @@ export async function auditRoutes(
           message: `Only the demo case (${DEMO_CASE_ID}) is available in the MVP.`,
         });
       }
-      if (options.llm === null) {
+      if (options.ranker === null) {
         return reply.code(503).send({
           error: "vultr_not_configured",
           message:
             "Vultr Serverless Inference is not configured. Set VULTR_INFERENCE_API_KEY, " +
-            "VULTR_INFERENCE_BASE_URL and VULTR_INFERENCE_MODEL (see .env.example), then retry.",
+            "VULTR_INFERENCE_BASE_URL and VULTR_INFERENCE_RETRIEVER_MODEL (see .env.example), then retry.",
         });
       }
 
       const { report, ...response } = await runAudit(loadDemoAuditInput(), {
-        llm: options.llm,
-        ...(options.ranker ? { ranker: options.ranker } : {}),
+        ranker: options.ranker,
       });
       reports.set(caseId, report);
       if (response.warnings.length > 0) {

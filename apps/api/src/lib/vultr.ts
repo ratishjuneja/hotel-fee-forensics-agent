@@ -1,4 +1,4 @@
-import { env, isVultrConfigured } from "../config/env.js";
+import { env, isRankerConfigured, isVultrConfigured } from "../config/env.js";
 
 /**
  * Minimal Vultr Serverless Inference client.
@@ -120,7 +120,10 @@ export async function rerank(
   documents: string[],
   options: { model: string; signal?: AbortSignal; timeoutMs?: number },
 ): Promise<Array<{ index: number; score: number }>> {
-  if (!isVultrConfigured) {
+  // The model id arrives as a parameter, so only credentials are required here
+  // (isVultrConfigured additionally demands the chat model id, which the
+  // VultronRetriever-only pipeline doesn't need).
+  if (!env.VULTR_INFERENCE_API_KEY || !env.VULTR_INFERENCE_BASE_URL) {
     throw new VultrNotConfiguredError();
   }
   const signal =
@@ -150,11 +153,13 @@ export async function rerank(
 /** Non-secret status for health/diagnostics surfaces. */
 export function vultrStatus(): {
   configured: boolean;
+  rankerConfigured: boolean;
   model: string | null;
   retrieverModel: string | null;
 } {
   return {
     configured: isVultrConfigured,
+    rankerConfigured: isRankerConfigured,
     model: env.VULTR_INFERENCE_MODEL ?? null,
     retrieverModel: env.VULTR_INFERENCE_RETRIEVER_MODEL ?? null,
   };
