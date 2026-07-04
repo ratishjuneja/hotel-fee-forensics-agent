@@ -46,9 +46,9 @@ The Harborline Hotel, audit month June vs prior month May.
 - [x] Add deterministic fee calculator
 - [x] Add anomaly checker (`packages/agent` `anomalyChecker.ts`: deterministic June-vs-May comparison — line items summed by `normalizedCategory`, charged fees by `feeType`; flags only when BOTH gates clear (|Δ%| ≥ 50% AND |Δ$| ≥ $5k) so rooms +2%/+$50k stays quiet while centralized services $7,500→$28,000 (+273%) flags high + `triggersReview`, feeding the orchestrator's re-retrieval loop; new items (prior $0) gate on dollars with `percentChange: null`; citations carried from both months)
 - [x] Add case-history / support-pack evidence tool (`packages/agent` `caseHistoryRetriever.ts`: deterministic Check 5 — `parseSupportPack` turns `04_support_invoice_pack.csv` into cited `SupportRecord[]` (including documented absences like `APPROVAL-0612-03` MISSING); `checkSupport` verifies a flagged charge: invoice on file? approval required per §5.1 threshold? → `supported` / `unsupported` (dispute-ready) / `needs_review` (no evidence or amount mismatch — never invented) / `not_required`; this is the evidence half of the anomaly → re-retrieval loop)
+- [x] Add decision engine + confidence scoring (`packages/agent` `decisionEngine.ts`: deterministic — `decideFindings` merges calculator impacts per issue type into cited `Finding`s (F1 $1,980 dispute / F2 $6,600 dispute / F3 $28,000 request_explanation = approval-or-reversal, never auto-clawback; unverified pass-through or NEEDS_REVIEW → human_review), tagging each with `issueType` + `checkLabel`; `scoreConfidence` renders the CLAUDE.md heuristic as a visible sum — Harborline 25+25+20+16+10 = **96** with per-component explanations; `@feeforensics/shared` gained optional `Finding.issueType`/`checkLabel` + `ConfidenceComponent`/`confidenceBreakdown` — closes contract gaps §8.6 (1) and (2))
 - [ ] Add agent orchestrator
 - [ ] Add report generator
-- [ ] Add confidence scoring
 
 ### Frontend
 
