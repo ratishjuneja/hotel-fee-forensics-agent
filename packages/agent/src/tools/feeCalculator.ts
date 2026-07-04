@@ -39,6 +39,8 @@ const BASE_REVENUE_CATEGORIES = new Set<NormalizedCategory>([
   "ROOM_REVENUE",
   "FNB_REVENUE",
   "BANQUET_REVENUE",
+  "OTHER_OPERATED_REVENUE",
+  "MISC_INCOME",
 ]);
 /** Default categories excluded from the base-fee revenue base (e.g. HMA §4.1(b)). */
 const DEFAULT_EXCLUDED_BASE_CATEGORIES: NormalizedCategory[] = ["CANCELLATION_REVENUE"];

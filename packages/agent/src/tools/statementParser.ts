@@ -168,6 +168,8 @@ function resolveHeaders(headerRow: string[]): Record<CanonicalColumn, number> {
 const REVENUE_CATEGORY_RULES: ReadonlyArray<readonly [RegExp, NormalizedCategory]> = [
   [/cancellation|attrition|no[-\s]?show/i, "CANCELLATION_REVENUE"],
   [/insurance/i, "INSURANCE_PROCEEDS"],
+  [/other\s+operated/i, "OTHER_OPERATED_REVENUE"],
+  [/misc(?:ellaneous)?\.?\s+income|space\s+rental|commission/i, "MISC_INCOME"],
   [/\brooms?\b/i, "ROOM_REVENUE"],
   [/food\s*&?\s*beverage|\bf\s*&?\s*b\b/i, "FNB_REVENUE"],
   [/banquet|catering/i, "BANQUET_REVENUE"],
@@ -343,8 +345,9 @@ export function parseOperatingStatement(
 /**
  * Parse the Misc Income breakout schedule. Every detail row is operating
  * revenue; the roll-up total is dropped. The two HMA §4.3 items (cancellation,
- * insurance) resolve to their excluded categories; the rest are kept as OTHER
- * (legitimately in the base, but no dedicated category yet).
+ * insurance) resolve to their excluded categories; legitimately-included lines
+ * (space rental, commissions) resolve to MISC_INCOME so they stay in the fee
+ * base. Anything unrecognized is kept as OTHER with a warning, never guessed.
  */
 export function parseMiscIncomeBreakout(
   csv: string,
