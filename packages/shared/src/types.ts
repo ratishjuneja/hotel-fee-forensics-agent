@@ -218,7 +218,29 @@ export interface Finding {
   explanation: string;
   recommendedAction: RecommendedAction;
   citations: Citation[];
+  /** 0..1 fraction (the UI renders it as a percentage). */
   confidence: number;
+  /** Which calculator issue produced this finding (tracker §8.6 gap 2). */
+  issueType?: IssueType;
+  /** Human-readable detection-check tag, e.g. "Check 2: Inclusion". */
+  checkLabel?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Confidence breakdown (tracker §8.6 gap 1)
+// ---------------------------------------------------------------------------
+
+/**
+ * One component of the transparent confidence heuristic. The overall report
+ * confidence renders as a visible SUM of these, per CLAUDE.md §confidence and
+ * data/demo/05_expected_answer.md (25 + 25 + 20 + 16 + 10 = 96 for Harborline).
+ */
+export interface ConfidenceComponent {
+  key: string;
+  label: string;
+  points: number;
+  max: number;
+  explanation: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -268,6 +290,7 @@ export interface AuditReport {
   executiveSummary: string;
   totalSuspectedOvercharge: number;
   confidence: number;
+  confidenceBreakdown?: ConfidenceComponent[];
   findings: Finding[];
   calculationResult: CalculationResult;
   memoMarkdown: string;
@@ -294,4 +317,5 @@ export interface RunAuditResponse {
   memo: string;
   emailDraft: DisputeEmail;
   confidence: number;
+  confidenceBreakdown?: ConfidenceComponent[];
 }

@@ -4,12 +4,14 @@
 
 | Area | Owner | Status | Notes |
 |---|---|---|---|
-| PRD/docs | Person C | Not started | Push early |
+| PRD/docs | Person C | ✅ Landed | Planning docs in `docs/` since kickoff (source of truth); tracker updated per PR |
 | Demo data | Person C | ✅ Landed | Synthetic case in `data/demo/` (Harborline, Jun vs May); ground truth $36,580 / 96% — see §4 |
-| Backend API | Person A | In progress | Skeleton + `/api/demo-case` (PR #3); mock `run-audit`/`report` (PR #4) |
-| Vultr inference | Person A | In progress | OpenAI-compatible client stub (PR #3); not yet in live path |
+| Backend API | Person A | In progress | Skeleton + `/api/demo-case` (PR #3); mock `run-audit`/`report` (PR #4); hardened in PR #16 (per-IP rate limit, body cap, global error handler, security headers) |
+| Vultr inference | Person A | In progress | OpenAI-compatible client stub (PR #3); 30s timeout + `max_tokens` cap + https enforcement (PR #16); not yet in live path |
 | Retrieval | Person A | 🟡 Tool built | `retriever.ts` — model-driven chunk selection on a VultronRetriever model (injected boundary, tested); wiring into orchestrator + live Vultr call pending |
 | Fee calculator | Person A | Done | Deterministic math in `packages/agent`; golden test re-based to Harborline **$36,580** (`harborlineCase.ts`); excluded-revenue sets now rule-driven (`FeeRules.*.excludedCategories`) |
+| Anomaly + evidence checks | Person A | ✅ Tools built | `anomalyChecker.ts` (PR-5) + `caseHistoryRetriever.ts` support-pack Check 5 (PR-6 / PR #17); deterministic, tested against the demo pack; orchestrator wiring pending |
+| Security hardening | Person A | ✅ Done | PR #16 — prompt-injection delimiting in agent tools, error info-leak fixes, markdown exfil guards, rate limiting, vitest bump |
 | Frontend shell | Person B | ✅ Scaffolded | Next.js+TS+Tailwind on :3000, wired to live API (see §8) |
 | Agent trace UI | Person B | 🟡 Baseline | Staged reveal + LLM/TOOL badges + loop highlight; polish left |
 | Findings UI | Person B | 🟡 Baseline | Cards + check tags + $ impact + citations; polish left |
@@ -46,9 +48,9 @@ The Harborline Hotel, audit month June vs prior month May.
 - [x] Add deterministic fee calculator
 - [x] Add anomaly checker (`packages/agent` `anomalyChecker.ts`: deterministic June-vs-May comparison — line items summed by `normalizedCategory`, charged fees by `feeType`; flags only when BOTH gates clear (|Δ%| ≥ 50% AND |Δ$| ≥ $5k) so rooms +2%/+$50k stays quiet while centralized services $7,500→$28,000 (+273%) flags high + `triggersReview`, feeding the orchestrator's re-retrieval loop; new items (prior $0) gate on dollars with `percentChange: null`; citations carried from both months)
 - [x] Add case-history / support-pack evidence tool (`packages/agent` `caseHistoryRetriever.ts`: deterministic Check 5 — `parseSupportPack` turns `04_support_invoice_pack.csv` into cited `SupportRecord[]` (including documented absences like `APPROVAL-0612-03` MISSING); `checkSupport` verifies a flagged charge: invoice on file? approval required per §5.1 threshold? → `supported` / `unsupported` (dispute-ready) / `needs_review` (no evidence or amount mismatch — never invented) / `not_required`; this is the evidence half of the anomaly → re-retrieval loop)
+- [x] Add decision engine + confidence scoring (`packages/agent` `decisionEngine.ts`: deterministic — `decideFindings` merges calculator impacts per issue type into cited `Finding`s (F1 $1,980 dispute / F2 $6,600 dispute / F3 $28,000 request_explanation = approval-or-reversal, never auto-clawback; unverified pass-through or NEEDS_REVIEW → human_review), tagging each with `issueType` + `checkLabel`; `scoreConfidence` renders the CLAUDE.md heuristic as a visible sum — Harborline 25+25+20+16+10 = **96** with per-component explanations; `@feeforensics/shared` gained optional `Finding.issueType`/`checkLabel` + `ConfidenceComponent`/`confidenceBreakdown` — closes contract gaps §8.6 (1) and (2))
 - [ ] Add agent orchestrator
 - [ ] Add report generator
-- [ ] Add confidence scoring
 
 ### Frontend
 
@@ -69,8 +71,9 @@ The Harborline Hotel, audit month June vs prior month May.
 
 - [x] Public repo
 - [x] `.env.example`
-- [x] No `.env` committed
-- [ ] README with demo instructions
+- [x] No `.env` committed (`.gitignore` covers all `.env*` variants since PR #16)
+- [x] Security hardening pass (PR #16: prompt-injection delimiters in agent tools, per-IP rate limit + body caps, error info-leak fixes, markdown image/URL restrictions, CSV formula-injection neutralized, vitest ^3.2.6)
+- [x] README with demo instructions (status + run commands current as of PR-6)
 - [ ] Sources and acknowledgements
 - [x] Clear note: all demo docs are synthetic (`data/demo/README.md`)
 - [ ] Final commit pushed
