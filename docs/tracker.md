@@ -75,10 +75,10 @@ The Harborline Hotel, audit month June vs prior month May.
 
 ## 3. Nice-to-Have Tasks
 
-- [ ] Upload flow
+- [x] Upload flow (UI + honest fallback to demo — see §8.5)
 - [ ] Vultr Object Storage upload
 - [ ] Vultr deployment
-- [ ] Export memo as PDF
+- [x] Export memo as PDF (print route — see §8.5)
 - [ ] More leakage scenarios
 - [ ] 21st.dev UI polish
 
@@ -223,6 +223,10 @@ remark-gfm · `@tailwindcss/typography`. Types imported from `@feeforensics/shar
       doc with the cited clause/line highlighted (`EvidenceProvider`, `lib/documents.ts`)
 - [x] **Dispute builder** — owner picks findings; a tailored email + downloadable packet
       assemble from the selection (`DisputeBuilder`, `lib/disputePacket.ts`)
+- [x] **PDF export** — print-styled `/cases/demo/report/print` route + auto-print,
+      linked from the report as "Export PDF" (browser Save-as-PDF, zero deps)
+- [x] **Upload flow** — `/cases/new` accepts documents, attempts `POST /api/cases`,
+      falls back honestly to the demo case when the MVP backend has no endpoint
 - [ ] Findings: expandable confidence backed by real data once contract adds it (§8.6)
 - [ ] "Cannot assess — evidence missing" state for checks with no evidence
 - [ ] `error.tsx` + `not-found.tsx` boundaries; loading skeletons
