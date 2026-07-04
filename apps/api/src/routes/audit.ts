@@ -17,6 +17,9 @@ interface CaseParams {
  */
 export async function auditRoutes(app: FastifyInstance): Promise<void> {
   // POST /api/cases/:caseId/run-audit
+  // Body is intentionally not schema-validated yet: the current call sends no body
+  // and the mock ignores it. Global `bodyLimit` (server.ts) caps size; add a body
+  // schema here when the real agent starts reading run options from the request.
   app.post<{ Params: CaseParams }>(
     "/api/cases/:caseId/run-audit",
     async (request, reply): Promise<RunAuditResponse | void> => {

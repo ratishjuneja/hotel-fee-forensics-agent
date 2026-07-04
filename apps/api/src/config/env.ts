@@ -12,14 +12,36 @@ const EnvSchema = z.object({
     .enum(["development", "test", "production"])
     .default("development"),
   PORT: z.coerce.number().int().positive().default(4000),
-  HOST: z.string().default("0.0.0.0"),
+  // Bind to loopback by default; set HOST=0.0.0.0 explicitly to expose the API
+  // (do that only behind a firewall / TLS-terminating reverse proxy).
+  HOST: z.string().default("127.0.0.1"),
   /** Comma-separated list of allowed CORS origins for the web app. */
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
 
   // Vultr Serverless Inference (core path). Optional so the API still boots
   // for local UI work; inference calls fail loudly when unconfigured.
   VULTR_INFERENCE_API_KEY: z.string().optional(),
-  VULTR_INFERENCE_BASE_URL: z.string().url().optional(),
+  // Require HTTPS (except localhost) so the Bearer API key is never sent in
+  // plaintext to a misconfigured http:// endpoint.
+  VULTR_INFERENCE_BASE_URL: z
+    .string()
+    .url()
+    .refine(
+      (u) => {
+        try {
+          const { protocol, hostname } = new URL(u);
+          return (
+            protocol === "https:" ||
+            hostname === "localhost" ||
+            hostname === "127.0.0.1"
+          );
+        } catch {
+          return false;
+        }
+      },
+      { message: "VULTR_INFERENCE_BASE_URL must use https:// (http is allowed only for localhost)" },
+    )
+    .optional(),
   VULTR_INFERENCE_MODEL: z.string().optional(),
 });
 

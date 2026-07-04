@@ -24,10 +24,17 @@ export class VultrNotConfiguredError extends Error {
 
 export class VultrRequestError extends Error {
   readonly status: number;
+  /**
+   * Raw upstream response body. Kept for server-side logging ONLY — never put it
+   * in `message`, which the API's error handler may surface to clients (an
+   * upstream body can echo request/prompt content and provider account detail).
+   */
+  readonly upstreamBody: string;
   constructor(status: number, body: string) {
-    super(`Vultr inference request failed (${status}): ${body}`);
+    super(`Vultr inference request failed (${status})`);
     this.name = "VultrRequestError";
     this.status = status;
+    this.upstreamBody = body;
   }
 }
 
@@ -41,7 +48,14 @@ export interface ChatCompleteOptions {
   model?: string;
   maxTokens?: number;
   signal?: AbortSignal;
+  /** Abort the request after this many ms when no `signal` is supplied (default 30s). */
+  timeoutMs?: number;
 }
+
+/** Default ceiling on completion length so a runaway/steered response can't inflate cost. */
+const DEFAULT_MAX_TOKENS = 1500;
+/** Default per-request timeout; an unbounded inference call can hang the whole audit. */
+const DEFAULT_TIMEOUT_MS = 30_000;
 
 interface ChatCompletionResponse {
   choices?: Array<{ message?: { content?: string } }>;
@@ -59,6 +73,11 @@ export async function chatComplete(
     throw new VultrNotConfiguredError();
   }
 
+  // Caller-provided signal wins; otherwise bound the call so it can't hang forever.
+  const signal =
+    options.signal ??
+    AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+
   const response = await fetch(
     `${env.VULTR_INFERENCE_BASE_URL}/chat/completions`,
     {
@@ -71,9 +90,9 @@ export async function chatComplete(
         model: options.model ?? env.VULTR_INFERENCE_MODEL,
         messages,
         temperature: options.temperature ?? 0.2,
-        ...(options.maxTokens ? { max_tokens: options.maxTokens } : {}),
+        max_tokens: options.maxTokens ?? DEFAULT_MAX_TOKENS,
       }),
-      signal: options.signal,
+      signal,
     },
   );
 
