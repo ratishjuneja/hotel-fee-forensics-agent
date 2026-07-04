@@ -1,13 +1,25 @@
+import { pathToFileURL } from "node:url";
 import Fastify from "fastify";
 import type { FastifyError } from "fastify";
 import cors from "@fastify/cors";
+import type { OrchestratorLlm } from "@feeforensics/agent";
 import { corsOrigins, env, isVultrConfigured } from "./config/env.js";
+import { createAuditLlm } from "./lib/llm.js";
 import { createRateLimiter } from "./lib/rateLimit.js";
 import { healthRoutes } from "./routes/health.js";
 import { demoCaseRoutes } from "./routes/demoCase.js";
 import { auditRoutes } from "./routes/audit.js";
 
-export async function buildServer() {
+export interface BuildServerOptions {
+  /**
+   * LLM transport for the audit agent. Omit for the default (live Vultr
+   * `chatComplete` when configured, otherwise null → run-audit 503s). Tests
+   * inject a scripted fake here so no VULTR_* env vars are needed.
+   */
+  llm?: OrchestratorLlm | null;
+}
+
+export async function buildServer(options: BuildServerOptions = {}) {
   const app = Fastify({
     logger: {
       level: env.NODE_ENV === "development" ? "info" : "warn",
@@ -45,7 +57,9 @@ export async function buildServer() {
 
   await app.register(healthRoutes);
   await app.register(demoCaseRoutes);
-  await app.register(auditRoutes);
+  await app.register(auditRoutes, {
+    llm: options.llm !== undefined ? options.llm : createAuditLlm(),
+  });
 
   return app;
 }
@@ -65,4 +79,12 @@ async function start() {
   }
 }
 
-start();
+// Only auto-start when run as the entry point (`tsx src/server.ts`); importing
+// `buildServer` from tests must not open a port.
+const isEntryPoint =
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isEntryPoint) {
+  start();
+}
