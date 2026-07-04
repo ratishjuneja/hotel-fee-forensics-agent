@@ -93,6 +93,13 @@ export interface FeeRules {
     percentage: number;
     revenueBase: string;
     excludedRevenue: string[];
+    /**
+     * Normalized categories stripped from the base-fee revenue base for this
+     * HMA (e.g. Harborline §4.3 excludes both cancellation *and* insurance
+     * revenue). Optional: when omitted the calculator falls back to its
+     * built-in default so existing cases keep their behavior.
+     */
+    excludedCategories?: NormalizedCategory[];
     citation: Citation;
   };
   incentiveFee?: {
@@ -101,6 +108,8 @@ export interface FeeRules {
     threshold?: number;
     ownerPriorityReturn?: number;
     excludedItems: string[];
+    /** Normalized categories deducted from the profit metric (GOP/AGOP). See above. */
+    excludedCategories?: NormalizedCategory[];
     citation: Citation;
   };
   passThroughRules?: {

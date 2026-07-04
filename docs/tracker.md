@@ -9,7 +9,7 @@
 | Backend API | Person A | In progress | Skeleton + `/api/demo-case` (PR #3); mock `run-audit`/`report` (PR #4) |
 | Vultr inference | Person A | In progress | OpenAI-compatible client stub (PR #3); not yet in live path |
 | Retrieval | Person A | Not started | Needs citations |
-| Fee calculator | Person A | Done | Deterministic math in `packages/agent`; TDD (unit test still on old $18,750 fixture — re-base to Harborline $36,580) |
+| Fee calculator | Person A | Done | Deterministic math in `packages/agent`; golden test re-based to Harborline **$36,580** (`harborlineCase.ts`); excluded-revenue sets now rule-driven (`FeeRules.*.excludedCategories`) |
 | Frontend shell | Person B | ✅ Scaffolded | Next.js+TS+Tailwind on :3000, wired to live API (see §8) |
 | Agent trace UI | Person B | 🟡 Baseline | Staged reveal + LLM/TOOL badges + loop highlight; polish left |
 | Findings UI | Person B | 🟡 Baseline | Cards + check tags + $ impact + citations; polish left |
@@ -88,10 +88,14 @@ The Harborline Hotel, audit month June vs prior month May.
 `data/demo/` ground truth (`05_expected_answer.md`) is now the single source of truth.
 The API mock (`apps/api/src/data/mockAudit.ts` + `demoCase.ts`), the bundled fallback
 (`apps/web/src/lib/cachedRun.ts`), the evidence viewer (`apps/web/src/lib/documents.ts`),
-and the `ConfidenceMeter` (now **96**) all render **$36,580 / 96%**. Only open item: the
-`packages/agent` calculator unit test still targets the old $18,750 fixture
-(`packages/agent/src/fixtures/grandHarborCase.ts`, PR #7) — re-base it to this case so the
-live path reproduces $36,580.
+and the `ConfidenceMeter` (now **96**) all render **$36,580 / 96%**. ✅ The
+`packages/agent` calculator golden test is now re-based to this case
+(`packages/agent/src/fixtures/harborlineCase.ts`; old `grandHarborCase.ts` removed) —
+the deterministic recompute reproduces $36,580 (F1 $1,980 + F2 $6,600 + F3 $28,000),
+expected fees $239,620 vs charged $276,200. Excluded-revenue categories are now
+rule-driven (`FeeRules.baseManagementFee.excludedCategories` /
+`incentiveFee.excludedCategories`), since Harborline §4.3 excludes the same $66k
+(insurance + cancellation) from both the base and GOP.
 
 ### Authoritative — synthetic `data/demo/` ground truth (use this)
 
