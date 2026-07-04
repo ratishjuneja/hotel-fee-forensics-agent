@@ -8,7 +8,7 @@
 | Demo data | Person C | ✅ Landed | Synthetic case in `data/demo/` (Harborline, Jun vs May); ground truth $36,580 / 96% — see §4 |
 | Backend API | Person A | In progress | Skeleton + `/api/demo-case` (PR #3); mock `run-audit`/`report` (PR #4) |
 | Vultr inference | Person A | In progress | OpenAI-compatible client stub (PR #3); not yet in live path |
-| Retrieval | Person A | Not started | Needs citations |
+| Retrieval | Person A | 🟡 Tool built | `retriever.ts` — model-driven chunk selection on a VultronRetriever model (injected boundary, tested); wiring into orchestrator + live Vultr call pending |
 | Fee calculator | Person A | Done | Deterministic math in `packages/agent`; golden test re-based to Harborline **$36,580** (`harborlineCase.ts`); excluded-revenue sets now rule-driven (`FeeRules.*.excludedCategories`) |
 | Frontend shell | Person B | ✅ Scaffolded | Next.js+TS+Tailwind on :3000, wired to live API (see §8) |
 | Agent trace UI | Person B | 🟡 Baseline | Staged reveal + LLM/TOOL badges + loop highlight; polish left |
@@ -41,7 +41,7 @@ The Harborline Hotel, audit month June vs prior month May.
 - [x] Add demo case endpoint
 - [x] Add CSV statement parser (`packages/agent` `statementParser.ts`: data/demo operating statement + misc breakout → `FinancialLineItem[]` + `ChargedFee[]`; tolerant headers/currency, category synonym map, unknown→OTHER+warning)
 - [ ] Add document chunker
-- [ ] Add retrieval tool
+- [x] Add retrieval tool (`packages/agent` `retriever.ts`: model-driven chunk selection via a VultronRetriever chat model — injected `RetrieverLlm` boundary; ranks by model score, drops hallucinated indices, tolerant JSON, topK/minScore)
 - [ ] Add fee rule extractor
 - [x] Add deterministic fee calculator
 - [ ] Add anomaly checker
