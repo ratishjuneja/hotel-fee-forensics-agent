@@ -39,15 +39,17 @@ trace** is visible in the UI so judges can see the agent reasoning across steps.
 
 ## Status
 
-🚧 Mid-build. The agent toolchain in `packages/agent` is built and tested — CSV statement
-parser, clause-aware document chunker, model-driven retriever, fee-rule extractor,
-deterministic fee calculator, month-over-month anomaly checker, and support-pack evidence
-tool — plus a security-hardening pass across the agent prompts, API, and web rendering.
-The API serves the demo case with a mock audit, and the frontend demo flow (case overview
-→ agent trace → findings → memo → dispute email) runs end-to-end. Remaining: decision
-engine + confidence scoring, report generator, the orchestrator loop, and wiring live
-Vultr inference into the audit path. See [`docs/tracker.md`](docs/tracker.md) for live
-status.
+🚧 Mid-build. The full agent pipeline is built, tested, and wired into the API: the
+orchestrator in `packages/agent` runs the 10-step traced audit loop (plan → retrieve fee
+clauses → retrieve exclusions → extract rules → deterministic recompute → anomaly checks
+→ conditional re-retrieval of prior month + support pack → evidence check → decide +
+confidence → memo/email) and reproduces the $36,580 / 96% ground truth from the synthetic
+documents in `data/demo/`. `POST run-audit` executes that pipeline live, with Vultr
+Serverless Inference as the injected LLM boundary (the model extracts, selects, and
+writes prose — all arithmetic is deterministic code), and the frontend demo flow (case
+overview → agent trace → findings → memo → dispute email) runs end-to-end. Remaining:
+a live end-to-end smoke against real Vultr inference, demo polish, and the pitch. See
+[`docs/tracker.md`](docs/tracker.md) for live status.
 
 ## Tech stack
 
