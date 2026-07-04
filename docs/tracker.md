@@ -6,7 +6,7 @@
 |---|---|---|---|
 | PRD/docs | Person C | Not started | Push early |
 | Demo data | Person C | Not started | Synthetic only |
-| Backend API | Person A | In progress | Skeleton + `/api/demo-case` done (PR #3) |
+| Backend API | Person A | In progress | Skeleton + `/api/demo-case` (PR #3); mock `run-audit`/`report` (PR #4) |
 | Vultr inference | Person A | In progress | OpenAI-compatible client stub (PR #3); not yet in live path |
 | Retrieval | Person A | Not started | Needs citations |
 | Fee calculator | Person A | Not started | Deterministic math |
@@ -80,11 +80,15 @@
 
 Use this section once synthetic data is created.
 
+Numbers below are the **mock/target** authored in the backend demo (PR #4). Person C:
+build the synthetic `data/demo/` financials so the real calculator reproduces these.
+
 | Finding | Expected Impact | Evidence | Status |
 |---|---:|---|---|
-| Excluded revenue included in base fee | TBD | HMA + revenue schedule | Not created |
-| Incentive fee calculated on inflated AGOP | TBD | HMA + GOP calc | Not created |
-| Corporate support passed through without approval | TBD | HMA + expense detail | Not created |
+| Banquet cancellation revenue in base-fee base | $6,000 | HMA §4.1(b) + operating statement | Mock authored (needs data) |
+| Incentive fee on AGOP inflated by insurance proceeds | $9,750 | HMA §4.2 + operating statement | Mock authored (needs data) |
+| Corporate support passed through without approval | $3,000 | HMA §6.3 + support pack | Mock authored (needs data) |
+| **Total suspected overcharge** | **$18,750** | — | Confidence 86% |
 
 ## 5. Merge Conflict Guardrails
 

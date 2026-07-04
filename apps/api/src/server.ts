@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import { corsOrigins, env, isVultrConfigured } from "./config/env.js";
 import { healthRoutes } from "./routes/health.js";
 import { demoCaseRoutes } from "./routes/demoCase.js";
+import { auditRoutes } from "./routes/audit.js";
 
 export async function buildServer() {
   const app = Fastify({
@@ -15,6 +16,7 @@ export async function buildServer() {
 
   await app.register(healthRoutes);
   await app.register(demoCaseRoutes);
+  await app.register(auditRoutes);
 
   return app;
 }
