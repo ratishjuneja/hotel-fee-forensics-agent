@@ -317,6 +317,54 @@ describe("runAudit — golden end-to-end (real data/demo files)", () => {
   });
 });
 
+// --- Worst observed live behavior: retrieval drops §4.3, extraction sees no exclusions
+
+describe("runAudit — retrieval drops the exclusions clause (deterministic backstop)", () => {
+  // Live Vultr runs showed both flakes at temperature 0: the model-driven
+  // retriever sometimes scores the §4.3 exclusions clause out of step 3, and a
+  // grounded extractor can't transcribe a clause it never saw, so it returns
+  // empty exclusion arrays. The orchestrator must union exclusion-labeled
+  // clauses into the extraction input, and the extractor derives the categories
+  // from that clause text — the golden attribution can't hinge on a coin flip.
+  const flakyLlm: OrchestratorLlm = async (messages) => {
+    const system = messages[0]?.content ?? "";
+    const user = messages[1]?.content ?? "";
+    if (system.includes("planning component")) {
+      return "Verify fees against HMA Articles 4 and 5 and the prior month.";
+    }
+    if (system.includes("retrieval component")) {
+      if (user.includes("base management fee")) return pickChunks(user, [/§4\.1/, /§4\.2/]);
+      // The flake: §4.3 (Revenue Exclusions) is NOT selected.
+      if (user.includes("excluded revenue")) return pickChunks(user, [/§5\.1/, /§9\.2/]);
+      if (user.includes("supporting invoice")) return pickChunks(user, [/0612-03/]);
+      throw new Error(`unscripted retrieval query: ${user.slice(0, 80)}`);
+    }
+    if (system.includes("extract the fee terms")) {
+      const envelope = JSON.parse(extractionResponse(user));
+      envelope.baseManagementFee.excludedRevenue = [];
+      envelope.baseManagementFee.excludedCategories = [];
+      envelope.incentiveFee.excludedItems = [];
+      envelope.incentiveFee.excludedCategories = [];
+      return JSON.stringify(envelope);
+    }
+    if (system.includes("draft two short pieces")) return proseResponse(user);
+    throw new Error(`unscripted prompt: ${system.slice(0, 60)}`);
+  };
+  const resultPromise = runAudit(harborlineInput(), { llm: flakyLlm, now });
+
+  it("still reproduces the golden findings and confidence", async () => {
+    const result = await resultPromise;
+    expect(result.findings.map((f) => f.suspectedImpact)).toEqual([1980, 6600, 28000]);
+    expect(result.findings.map((f) => f.recommendedAction)).toEqual([
+      "dispute",
+      "dispute",
+      "request_explanation",
+    ]);
+    expect(result.confidence).toBe(0.96);
+    expect(result.warnings).toEqual([]);
+  });
+});
+
 // --- Conditional loop: stable months skip steps 7–8 -------------------------------
 
 describe("runAudit — stable months (no anomaly, no re-retrieval loop)", () => {

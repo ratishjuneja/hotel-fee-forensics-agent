@@ -133,12 +133,103 @@ describe("extractFeeRules — Harborline HMA", () => {
     expect(result.expectedTotalFees).toBe(239620);
   });
 
+  it("normalizes free-text exclusions to categories in code when the model omits them", async () => {
+    // Live models transcribe the clause words into excludedRevenue/excludedItems
+    // reliably but volunteer the enum labels only sometimes (run-to-run, even at
+    // temperature 0). The words → enum mapping is deterministic — code's job.
+    const envelope = JSON.parse(FULL_EXTRACTION);
+    envelope.baseManagementFee.excludedCategories = [];
+    envelope.incentiveFee.excludedCategories = [];
+    const { fn } = fakeLlm(JSON.stringify(envelope));
+    const { rules } = await extractFeeRules(CHUNKS, { llm: fn, documentName: DOCUMENT_NAME });
+
+    expect(rules.baseManagementFee!.excludedCategories).toEqual(
+      expect.arrayContaining(["INSURANCE_PROCEEDS", "CANCELLATION_REVENUE"]),
+    );
+    expect(rules.incentiveFee!.excludedCategories).toEqual(
+      expect.arrayContaining(["INSURANCE_PROCEEDS", "CANCELLATION_REVENUE"]),
+    );
+    // The normalized rules still reproduce the golden answer end-to-end.
+    const result = calculateFees({
+      caseId: HARBORLINE_CASE_ID,
+      rules,
+      lineItems: harborlineLineItems,
+      chargedFees: harborlineChargedFees,
+    });
+    expect(result.variance).toBe(36580);
+    expect(result.expectedTotalFees).toBe(239620);
+  });
+
+  it("falls back to the retrieved exclusions clause when the model returns no exclusions at all", async () => {
+    // Worst observed live behavior (temperature 0 is not deterministic across
+    // runs): the model maps §4.1/§4.2 but never connects the "subject to the
+    // exclusions in Section 4.3" cross-reference, returning empty exclusion
+    // arrays. The §4.3 chunk is right there in the prompt — code derives the
+    // categories from it so the golden attribution never depends on a coin flip.
+    const envelope = JSON.parse(FULL_EXTRACTION);
+    envelope.baseManagementFee.excludedRevenue = [];
+    envelope.baseManagementFee.excludedCategories = [];
+    envelope.incentiveFee.excludedItems = [];
+    envelope.incentiveFee.excludedCategories = [];
+    const { fn } = fakeLlm(JSON.stringify(envelope));
+    const { rules } = await extractFeeRules(CHUNKS, { llm: fn, documentName: DOCUMENT_NAME });
+
+    expect(rules.baseManagementFee!.excludedCategories).toEqual(
+      expect.arrayContaining(["INSURANCE_PROCEEDS", "CANCELLATION_REVENUE"]),
+    );
+    expect(rules.incentiveFee!.excludedCategories).toEqual(
+      expect.arrayContaining(["INSURANCE_PROCEEDS", "CANCELLATION_REVENUE"]),
+    );
+    const result = calculateFees({
+      caseId: HARBORLINE_CASE_ID,
+      rules,
+      lineItems: harborlineLineItems,
+      chargedFees: harborlineChargedFees,
+    });
+    expect(result.variance).toBe(36580);
+    expect(result.expectedTotalFees).toBe(239620);
+  });
+
   it("feeds the real clause text to the model (grounded extraction, not a stub)", async () => {
     const { fn, calls } = fakeLlm(FULL_EXTRACTION);
     await extractFeeRules(CHUNKS, { llm: fn, documentName: DOCUMENT_NAME });
     const prompt = calls.flat().map((m) => m.content).join("\n");
     expect(prompt).toContain("Total Operating Revenue");
     expect(prompt).toContain("HMA §4.3 — Revenue Exclusions");
+  });
+
+  it("pins the exact envelope field names in the prompt — live models must not guess the schema", async () => {
+    // First live run failed here: the prompt named only the four top-level keys,
+    // so the model invented its own fields (rate/basis/clauseText) and padded
+    // them with full clause text until the completion cap truncated the JSON.
+    const { fn, calls } = fakeLlm(FULL_EXTRACTION);
+    await extractFeeRules(CHUNKS, { llm: fn, documentName: DOCUMENT_NAME });
+    const system = calls[0]![0]!.content;
+    const fields = [
+      '"baseManagementFee"',
+      '"incentiveFee"',
+      '"passThroughRules"',
+      '"auditRights"',
+      '"found"',
+      '"ratePercent"',
+      '"revenueBase"',
+      '"excludedRevenue"',
+      '"excludedCategories"',
+      '"profitMetric"',
+      '"threshold"',
+      '"ownerPriorityReturn"',
+      '"excludedItems"',
+      '"allowedCategories"',
+      '"approvalThreshold"',
+      '"correctionWindowDays"',
+      '"sourceIndex"',
+      '"quote"',
+    ];
+    for (const field of fields) {
+      expect(system, `prompt must spell out ${field}`).toContain(field);
+    }
+    // Quotes must be bounded excerpts or a verbose model blows the token cap.
+    expect(system).toContain("200 characters");
   });
 
   it("omits a clause the model could not find instead of inventing it", async () => {

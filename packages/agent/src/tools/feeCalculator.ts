@@ -107,12 +107,15 @@ export function computeBaseFee(
     rule.excludedCategories,
     DEFAULT_EXCLUDED_BASE_CATEGORIES,
   );
-  const excludedItems =
-    rule.excludedRevenue.length > 0
-      ? lineItems.filter(
-          (i) => excludedCategories.has(i.normalizedCategory) && i.amount !== 0,
-        )
-      : [];
+  // A rule declares exclusions in free text, normalized categories, or both —
+  // an extractor that grounded only the categories still declared them.
+  const declaresExclusions =
+    rule.excludedRevenue.length > 0 || (rule.excludedCategories?.length ?? 0) > 0;
+  const excludedItems = declaresExclusions
+    ? lineItems.filter(
+        (i) => excludedCategories.has(i.normalizedCategory) && i.amount !== 0,
+      )
+    : [];
 
   const impacts = excludedItems.map(
     (i): LineItemImpact => ({
@@ -149,12 +152,14 @@ export function computeIncentiveFee(
     rule.excludedCategories,
     DEFAULT_EXCLUDED_AGOP_CATEGORIES,
   );
-  const excludedItems =
-    rule.excludedItems.length > 0
-      ? lineItems.filter(
-          (i) => excludedCategories.has(i.normalizedCategory) && i.amount !== 0,
-        )
-      : [];
+  // Same as the base fee: categories alone are a declared exclusion.
+  const declaresExclusions =
+    rule.excludedItems.length > 0 || (rule.excludedCategories?.length ?? 0) > 0;
+  const excludedItems = declaresExclusions
+    ? lineItems.filter(
+        (i) => excludedCategories.has(i.normalizedCategory) && i.amount !== 0,
+      )
+    : [];
   const excludedTotal = excludedItems.reduce((acc, i) => acc + i.amount, 0);
 
   // Threshold-aware: the fee only moves for AGOP above the owner-priority line.
@@ -192,8 +197,17 @@ export function computePassThrough(
   if (!rule) return [];
 
   const excludedCategories = new Set<string>(rule.excludedCategories);
+  // §5.1-style clauses state a $ approval threshold, not a category ban, so an
+  // honest extractor may return no excluded categories at all. The threshold
+  // comparison is arithmetic — it lives here, never with the model.
+  const exceedsApprovalThreshold = (i: FinancialLineItem): boolean =>
+    rule.approvalThreshold != null &&
+    i.normalizedCategory === "CORPORATE_OVERHEAD" &&
+    Math.abs(i.amount) > rule.approvalThreshold;
   const improper = lineItems.filter(
-    (i) => excludedCategories.has(i.normalizedCategory) && i.amount !== 0,
+    (i) =>
+      (excludedCategories.has(i.normalizedCategory) || exceedsApprovalThreshold(i)) &&
+      i.amount !== 0,
   );
 
   return improper.map(
