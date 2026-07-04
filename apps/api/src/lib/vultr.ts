@@ -106,9 +106,14 @@ export async function chatComplete(
 }
 
 /** Non-secret status for health/diagnostics surfaces. */
-export function vultrStatus(): { configured: boolean; model: string | null } {
+export function vultrStatus(): {
+  configured: boolean;
+  model: string | null;
+  retrieverModel: string | null;
+} {
   return {
     configured: isVultrConfigured,
     model: env.VULTR_INFERENCE_MODEL ?? null,
+    retrieverModel: env.VULTR_INFERENCE_RETRIEVER_MODEL ?? null,
   };
 }

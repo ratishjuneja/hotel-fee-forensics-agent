@@ -43,6 +43,11 @@ const EnvSchema = z.object({
     )
     .optional(),
   VULTR_INFERENCE_MODEL: z.string().optional(),
+  /**
+   * Optional dedicated model for the agent's retrieval steps (e.g. a
+   * VultronRetriever* flavor). Unset → every call uses VULTR_INFERENCE_MODEL.
+   */
+  VULTR_INFERENCE_RETRIEVER_MODEL: z.string().optional(),
 });
 
 export const env = EnvSchema.parse(process.env);
