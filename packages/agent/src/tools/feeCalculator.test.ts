@@ -176,4 +176,30 @@ describe("calculateFees — edge cases", () => {
     // Everything still reconciles.
     expect(sumImpacts(result.lineItemImpacts)).toBeCloseTo(result.variance, 2);
   });
+
+  it("flags an above-threshold pass-through from the $ threshold alone — no extracted exclusion list needed", () => {
+    // §5.1 states an approval threshold, not a category ban, so a live
+    // extractor honestly returns excludedCategories: [] — the first live Vultr
+    // run proved it. The threshold comparison is arithmetic and must live in
+    // this calculator, never depend on the model volunteering a category.
+    const rules: FeeRules = {
+      ...harborlineRules,
+      passThroughRules: {
+        ...harborlineRules.passThroughRules!,
+        excludedCategories: [],
+      },
+    };
+    const result = calculateFees({
+      caseId: HARBORLINE_CASE_ID,
+      rules,
+      lineItems: harborlineLineItems,
+      chargedFees: harborlineChargedFees,
+    });
+    const passThrough = result.lineItemImpacts.filter(
+      (i) => i.issueType === "IMPROPER_PASS_THROUGH",
+    );
+    expect(passThrough.map((i) => i.amountImpact)).toEqual([28000]);
+    // And the full variance still reconciles to the golden $36,580.
+    expect(sumImpacts(result.lineItemImpacts)).toBeCloseTo(result.variance, 2);
+  });
 });

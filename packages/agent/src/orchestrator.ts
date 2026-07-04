@@ -378,7 +378,17 @@ export async function runAudit(
   );
 
   // ---- Step 4 — extract structured fee rules (LLM) ---------------------------
-  const ruleChunks = dedupeChunks([...feeClauseChunks, ...exclusionChunks]);
+  // Revenue-exclusion clauses are load-bearing for fee attribution: if the
+  // model-driven retrieval scores one out (observed run-to-run live), the
+  // extractor could never ground the exclusions. Union them in deterministically.
+  const exclusionClauseBackstop = hmaChunks.filter((c) =>
+    /exclusion/i.test(c.citationLabel),
+  );
+  const ruleChunks = dedupeChunks([
+    ...feeClauseChunks,
+    ...exclusionChunks,
+    ...exclusionClauseBackstop,
+  ]);
   let rules: FeeRules = {};
   try {
     const extraction = await extractFeeRules(ruleChunks, {
