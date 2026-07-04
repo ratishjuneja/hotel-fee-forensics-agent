@@ -13,8 +13,8 @@ import {
 } from "lucide-react";
 import type { AgentTraceStep, RunAuditResponse } from "@feeforensics/shared";
 import { runAudit } from "@/lib/api";
+import { CACHED_RUN } from "@/lib/cachedRun";
 import { Badge } from "@/components/ui/Badge";
-import { ApiErrorPanel } from "@/components/ApiErrorPanel";
 import { cn, formatCurrency, formatPercent } from "@/lib/utils";
 
 /** A step is part of the re-retrieval loop if it re-fetches after a warning. */
@@ -23,21 +23,41 @@ function isLoopStep(step: AgentTraceStep): boolean {
 }
 
 const STEP_DELAY_MS = 750;
+/** No first trace event within this window → replay the bundled run (AppFlow §6). */
+const FALLBACK_MS = 10_000;
 
 export default function RunPage() {
   const [result, setResult] = useState<RunAuditResponse | null>(null);
   const [visible, setVisible] = useState(0);
-  const [error, setError] = useState(false);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  // Kick off the audit run once.
+  // Kick off the audit run, but never let the demo stall: whichever of the live
+  // run or the ~10s fallback timer resolves first "wins", and later arrivals are
+  // ignored so the trace never swaps mid-run. If the API is unreachable we replay
+  // immediately. The fallback is SILENT — no audience-visible error (AppFlow §6).
   useEffect(() => {
-    let cancelled = false;
+    let alive = true;
+    let committed = false;
+
+    const commit = (r: RunAuditResponse, cached: boolean) => {
+      if (!alive || committed) return;
+      committed = true;
+      if (cached) {
+        console.info(
+          "[FeeForensics] Live run unavailable — replaying bundled run.",
+        );
+      }
+      setResult(r);
+    };
+
     runAudit()
-      .then((r) => !cancelled && setResult(r))
-      .catch(() => !cancelled && setError(true));
+      .then((r) => commit(r, false))
+      .catch(() => commit(CACHED_RUN, true)); // API unreachable → replay now
+
+    const fallback = setTimeout(() => commit(CACHED_RUN, true), FALLBACK_MS);
     return () => {
-      cancelled = true;
+      alive = false;
+      clearTimeout(fallback);
     };
   }, []);
 
@@ -56,14 +76,6 @@ export default function RunPage() {
     return () => timers.current.forEach(clearTimeout);
   }, [result]);
 
-  if (error) {
-    return (
-      <div className="mx-auto max-w-3xl px-4 py-16">
-        <ApiErrorPanel message="The agent run could not start." />
-      </div>
-    );
-  }
-
   const steps = result?.trace ?? [];
   const shown = steps.slice(0, visible);
   const done = result !== null && visible >= steps.length;
@@ -76,7 +88,7 @@ export default function RunPage() {
             Agent Investigation
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Grand Harbor Hotel · June 2026 — the agent plans, retrieves,
+            The Harborline Hotel · June 2026 — the agent plans, retrieves,
             recomputes, and loops back on ambiguity.
           </p>
         </div>

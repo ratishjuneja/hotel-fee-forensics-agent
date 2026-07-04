@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Printer } from "lucide-react";
 import type {
   AuditReport,
   Finding,
@@ -7,13 +7,14 @@ import type {
   Severity,
 } from "@feeforensics/shared";
 import { getReport } from "@/lib/api";
+import { CACHED_REPORT } from "@/lib/cachedRun";
 import { Badge } from "@/components/ui/Badge";
 import { CitationPill } from "@/components/CitationPill";
+import { EvidenceProvider } from "@/components/EvidenceProvider";
 import { ConfidenceMeter } from "@/components/ConfidenceMeter";
-import { CopyButton } from "@/components/CopyButton";
+import { DisputeBuilder } from "@/components/DisputeBuilder";
 import { DownloadButton } from "@/components/DownloadButton";
 import { Markdown } from "@/components/Markdown";
-import { ApiErrorPanel } from "@/components/ApiErrorPanel";
 import { CHECK_LABEL, cn, formatCurrency } from "@/lib/utils";
 
 const SEVERITY_STYLE: Record<Severity, string> = {
@@ -34,18 +35,17 @@ const ACTION_LABEL: Record<RecommendedAction, string> = {
 export const dynamic = "force-dynamic";
 
 export default async function ReportPage() {
+  // Silent demo-safety fallback: if the live API is unreachable, serve the
+  // bundled report so the flow never dead-ends on an error (docs/AppFlow.md §6).
   let report: AuditReport;
   try {
     report = await getReport();
   } catch {
-    return (
-      <div className="mx-auto max-w-3xl px-4 py-16">
-        <ApiErrorPanel message="Could not load the audit report." />
-      </div>
-    );
+    console.info("[FeeForensics] Report API unreachable — serving bundled report.");
+    report = CACHED_REPORT;
   }
 
-  const { findings, calculationResult, memoMarkdown, disputeEmail } = report;
+  const { findings, calculationResult, memoMarkdown } = report;
   // Derive each finding's detection check by zipping with the calculator's
   // line-item impacts (same order). See CHECK_LABEL note in lib/utils.
   const checkFor = (i: number): string | undefined => {
@@ -54,9 +54,10 @@ export default async function ReportPage() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10">
-      <Link
-        href="/cases/demo/run"
+    <EvidenceProvider>
+      <div className="mx-auto max-w-4xl px-4 py-10">
+        <Link
+          href="/cases/demo/run"
         className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-700"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -71,7 +72,7 @@ export default async function ReportPage() {
             {formatCurrency(report.totalSuspectedOvercharge)}
           </p>
           <p className="mt-1 text-sm text-slate-500">
-            {findings.length} findings · Grand Harbor Hotel · June 2026
+            {findings.length} findings · The Harborline Hotel · June 2026
           </p>
         </div>
         <div>
@@ -131,37 +132,34 @@ export default async function ReportPage() {
       </div>
 
       {/* Memo */}
-      <div className="mt-10 flex items-center justify-between">
+      <div className="mt-10 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-bold tracking-tight">Audit memo</h2>
-        <DownloadButton
-          content={memoMarkdown}
-          filename="grand-harbor-fee-audit-memo.md"
-          label="Download memo"
-        />
+        <div className="flex items-center gap-2">
+          <Link
+            href="/cases/demo/report/print"
+            target="_blank"
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-brand-300 hover:text-brand-700"
+          >
+            <Printer className="h-4 w-4" />
+            Export PDF
+          </Link>
+          <DownloadButton
+            content={memoMarkdown}
+            filename="harborline-fee-audit-memo.md"
+            label="Download memo"
+          />
+        </div>
       </div>
       <div className="mt-3 card p-6">
         <Markdown>{memoMarkdown}</Markdown>
       </div>
 
-      {/* Dispute email */}
-      <div className="mt-10 flex items-center justify-between">
-        <h2 className="text-lg font-bold tracking-tight">Draft dispute email</h2>
-        <CopyButton
-          text={`Subject: ${disputeEmail.subject}\n\n${disputeEmail.body}`}
-          label="Copy email"
-        />
+      {/* Dispute builder */}
+      <div className="mt-10">
+        <DisputeBuilder findings={findings} />
       </div>
-      <div className="mt-3 card p-6">
-        <p className="text-sm font-semibold text-slate-500">Subject</p>
-        <p className="mt-0.5 font-medium text-slate-900">
-          {disputeEmail.subject}
-        </p>
-        <hr className="my-4 border-slate-100" />
-        <pre className="whitespace-pre-wrap font-sans text-sm text-slate-700">
-          {disputeEmail.body}
-        </pre>
       </div>
-    </div>
+    </EvidenceProvider>
   );
 }
 

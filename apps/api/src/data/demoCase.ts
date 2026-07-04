@@ -62,7 +62,7 @@ const documents: DocumentRef[] = [
 
 export const demoCase: Case = {
   id: DEMO_CASE_ID,
-  hotelName: "Grand Harbor Hotel",
+  hotelName: "The Harborline Hotel",
   auditMonth: "2026-06",
   status: "created",
   documents,

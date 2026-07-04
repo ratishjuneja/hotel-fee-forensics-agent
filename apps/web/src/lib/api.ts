@@ -51,3 +51,19 @@ export function runAudit(
 export function getReport(caseId: string = DEMO_CASE_ID): Promise<AuditReport> {
   return request<AuditReport>(`/api/cases/${caseId}/report`);
 }
+
+/**
+ * POST /api/cases — create a case from uploaded documents.
+ *
+ * Forward-compatible: the MVP backend does not implement this yet, so this
+ * currently throws `ApiError`. The upload screen catches that and offers the
+ * preloaded demo case rather than faking analysis of the uploaded files.
+ */
+export function createCase(files: File[]): Promise<{ caseId: string }> {
+  const form = new FormData();
+  for (const f of files) form.append("documents", f, f.name);
+  return request<{ caseId: string }>("/api/cases", {
+    method: "POST",
+    body: form,
+  });
+}

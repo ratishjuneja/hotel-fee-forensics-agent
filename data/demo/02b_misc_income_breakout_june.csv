@@ -1,0 +1,6 @@
+schedule,line_item,amount,excluded_per_hma_4_3,note
+Miscellaneous Income,Space Rental,40000,no,legitimately in fee base
+Miscellaneous Income,Commissions,34000,no,legitimately in fee base
+Miscellaneous Income,Banquet Cancellation Revenue,41000,yes,EXCLUDED per HMA 4.3(c) - cancellation revenue
+Miscellaneous Income,Insurance Proceeds,25000,yes,EXCLUDED per HMA 4.3(a) - insurance proceeds
+Miscellaneous Income,Total Miscellaneous Income,140000,,foots to Misc Income line on operating statement

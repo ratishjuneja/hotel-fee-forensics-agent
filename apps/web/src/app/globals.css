@@ -28,3 +28,27 @@
     transform: translateY(0);
   }
 }
+
+/* Evidence drawer slide-in from the right. */
+@keyframes slidein {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* Print / Save-as-PDF: clean margins, white surface, avoid clipped rows. */
+@media print {
+  body {
+    background: #fff;
+  }
+  @page {
+    margin: 16mm;
+  }
+  table,
+  pre {
+    break-inside: avoid;
+  }
+}

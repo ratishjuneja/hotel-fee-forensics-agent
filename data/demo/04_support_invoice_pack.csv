@@ -1,0 +1,7 @@
+doc_id,type,relates_to,amount,status,note
+INV-0612-01,invoice,Space Rental (Misc Income),40000,present,supports legitimate misc income - matches statement
+INV-0612-02,invoice,Commissions (Misc Income),34000,present,supports legitimate misc income - matches statement
+INV-0612-03,invoice,Centralized Services charge,28000,present,invoice exists for the charge amount
+APPROVAL-0612-03,owner_approval,Centralized Services charge,28000,MISSING,"REQUIRED per HMA 5.1 (charge > 10k) but NOT in pack - this absence is what Check 5 catches"
+,,Banquet Cancellation Revenue,41000,n/a,no support needed - should simply not be in fee base (excluded per 4.3)
+,,Insurance Proceeds,25000,n/a,no support needed - should simply not be in fee base (excluded per 4.3)
