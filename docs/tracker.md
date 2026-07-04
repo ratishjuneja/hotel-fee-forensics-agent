@@ -4,12 +4,14 @@
 
 | Area | Owner | Status | Notes |
 |---|---|---|---|
-| PRD/docs | Person C | Not started | Push early |
+| PRD/docs | Person C | ✅ Landed | Planning docs in `docs/` since kickoff (source of truth); tracker updated per PR |
 | Demo data | Person C | ✅ Landed | Synthetic case in `data/demo/` (Harborline, Jun vs May); ground truth $36,580 / 96% — see §4 |
-| Backend API | Person A | In progress | Skeleton + `/api/demo-case` (PR #3); mock `run-audit`/`report` (PR #4) |
-| Vultr inference | Person A | In progress | OpenAI-compatible client stub (PR #3); not yet in live path |
+| Backend API | Person A | In progress | Skeleton + `/api/demo-case` (PR #3); mock `run-audit`/`report` (PR #4); hardened in PR #16 (per-IP rate limit, body cap, global error handler, security headers) |
+| Vultr inference | Person A | In progress | OpenAI-compatible client stub (PR #3); 30s timeout + `max_tokens` cap + https enforcement (PR #16); not yet in live path |
 | Retrieval | Person A | 🟡 Tool built | `retriever.ts` — model-driven chunk selection on a VultronRetriever model (injected boundary, tested); wiring into orchestrator + live Vultr call pending |
 | Fee calculator | Person A | Done | Deterministic math in `packages/agent`; golden test re-based to Harborline **$36,580** (`harborlineCase.ts`); excluded-revenue sets now rule-driven (`FeeRules.*.excludedCategories`) |
+| Anomaly + evidence checks | Person A | ✅ Tools built | `anomalyChecker.ts` (PR-5) + `caseHistoryRetriever.ts` support-pack Check 5 (PR-6 / PR #17); deterministic, tested against the demo pack; orchestrator wiring pending |
+| Security hardening | Person A | ✅ Done | PR #16 — prompt-injection delimiting in agent tools, error info-leak fixes, markdown exfil guards, rate limiting, vitest bump |
 | Frontend shell | Person B | ✅ Scaffolded | Next.js+TS+Tailwind on :3000, wired to live API (see §8) |
 | Agent trace UI | Person B | 🟡 Baseline | Staged reveal + LLM/TOOL badges + loop highlight; polish left |
 | Findings UI | Person B | 🟡 Baseline | Cards + check tags + $ impact + citations; polish left |
@@ -69,8 +71,9 @@ The Harborline Hotel, audit month June vs prior month May.
 
 - [x] Public repo
 - [x] `.env.example`
-- [x] No `.env` committed
-- [ ] README with demo instructions
+- [x] No `.env` committed (`.gitignore` covers all `.env*` variants since PR #16)
+- [x] Security hardening pass (PR #16: prompt-injection delimiters in agent tools, per-IP rate limit + body caps, error info-leak fixes, markdown image/URL restrictions, CSV formula-injection neutralized, vitest ^3.2.6)
+- [x] README with demo instructions (status + run commands current as of PR-6)
 - [ ] Sources and acknowledgements
 - [x] Clear note: all demo docs are synthetic (`data/demo/README.md`)
 - [ ] Final commit pushed

@@ -39,12 +39,19 @@ trace** is visible in the UI so judges can see the agent reasoning across steps.
 
 ## Status
 
-🚧 Early setup. Planning docs are complete; implementation is starting. See
-[`docs/tracker.md`](docs/tracker.md) for live status.
+🚧 Mid-build. The agent toolchain in `packages/agent` is built and tested — CSV statement
+parser, clause-aware document chunker, model-driven retriever, fee-rule extractor,
+deterministic fee calculator, month-over-month anomaly checker, and support-pack evidence
+tool — plus a security-hardening pass across the agent prompts, API, and web rendering.
+The API serves the demo case with a mock audit, and the frontend demo flow (case overview
+→ agent trace → findings → memo → dispute email) runs end-to-end. Remaining: decision
+engine + confidence scoring, report generator, the orchestrator loop, and wiring live
+Vultr inference into the audit path. See [`docs/tracker.md`](docs/tracker.md) for live
+status.
 
-## Tech stack (intended)
+## Tech stack
 
-- **Frontend:** Next.js + TypeScript + Tailwind + shadcn/ui
+- **Frontend:** Next.js 15 (App Router) + TypeScript + Tailwind
 - **Backend:** Fastify + TypeScript + Zod
 - **Inference:** Vultr Serverless Inference (OpenAI-compatible)
 - **Storage (MVP):** local JSON + files; Vultr Object Storage / Managed PostgreSQL as stretch
@@ -53,11 +60,15 @@ trace** is visible in the UI so judges can see the agent reasoning across steps.
 
 ```bash
 cp .env.example .env   # then fill in your Vultr credentials
+npm install            # from the repo root
+
+npm run dev:api                              # terminal 1 — API on :4000
+npm run dev --workspace=@feeforensics/web    # terminal 2 — web on :3000
 ```
 
-Application scaffolding (`apps/`, `packages/`) is not committed yet — this repo currently
-holds the planning docs and project setup. See [`CLAUDE.md`](CLAUDE.md) for architecture
-and working conventions, and [`docs/`](docs/) for the full spec.
+Open <http://localhost:3000> and follow the demo case (Landing → Case Overview → Run
+Audit → Report). See [`CLAUDE.md`](CLAUDE.md) for architecture and working conventions,
+and [`docs/`](docs/) for the full spec.
 
 ## Documentation
 
