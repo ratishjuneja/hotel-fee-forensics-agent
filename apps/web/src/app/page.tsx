@@ -22,7 +22,7 @@ const CAPABILITIES = [
   {
     icon: ScrollText,
     title: "Finds the leakage",
-    body: "Flags excluded revenue, inflated AGOP, and improper pass-throughs.",
+    body: "Flags excluded revenue, inflated GOP, and improper pass-throughs.",
   },
   {
     icon: Quote,
@@ -56,15 +56,13 @@ export default function LandingPage() {
               Run Demo Audit
               <ArrowRight className="h-4 w-4" />
             </Link>
-            <button
-              type="button"
-              disabled
-              title="Upload flow is out of scope for the demo"
-              className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg border border-slate-300 px-5 py-3 font-medium text-slate-400"
+            <Link
+              href="/cases/new"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-5 py-3 font-medium text-slate-700 transition hover:border-brand-300 hover:text-brand-700"
             >
               <Upload className="h-4 w-4" />
               Upload Documents
-            </button>
+            </Link>
           </div>
           <p className="mt-4 text-xs text-slate-500">
             Built with Vultr Serverless Inference · Preloaded synthetic case

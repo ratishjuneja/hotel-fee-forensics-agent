@@ -1,0 +1,22 @@
+section,line_item,amount,usali_layer,note
+OPERATING REVENUE,Rooms,2400000,operating_revenue,
+OPERATING REVENUE,Food & Beverage,820000,operating_revenue,
+OPERATING REVENUE,Other Operated Departments,180000,operating_revenue,
+OPERATING REVENUE,Miscellaneous Income,140000,operating_revenue,see misc income breakout schedule
+OPERATING REVENUE,Total Operating Revenue,3540000,operating_revenue_total,
+DEPARTMENTAL EXPENSES,Rooms,620000,departmental_expense,
+DEPARTMENTAL EXPENSES,Food & Beverage,590000,departmental_expense,
+DEPARTMENTAL EXPENSES,Other Operated Departments,95000,departmental_expense,
+DEPARTMENTAL EXPENSES,Total Departmental Expenses,1305000,departmental_expense_total,
+SUBTOTAL,Total Departmental Profit,2235000,departmental_profit,
+UNDISTRIBUTED OPERATING EXPENSES,Administrative & General,240000,undistributed_expense,
+UNDISTRIBUTED OPERATING EXPENSES,Information & Telecom Systems,85000,undistributed_expense,
+UNDISTRIBUTED OPERATING EXPENSES,Sales & Marketing,210000,undistributed_expense,
+UNDISTRIBUTED OPERATING EXPENSES,Property Operations & Maintenance,160000,undistributed_expense,
+UNDISTRIBUTED OPERATING EXPENSES,Utilities,120000,undistributed_expense,
+UNDISTRIBUTED OPERATING EXPENSES,Total Undistributed Expenses,815000,undistributed_expense_total,
+SUBTOTAL,Gross Operating Profit (GOP),1420000,gop,incentive fee base per HMA 4.2
+MANAGEMENT FEES,Base Management Fee,106200,fee_charged,operator charged 3.0% of Total Operating Revenue
+MANAGEMENT FEES,Incentive Management Fee,142000,fee_charged,operator charged 10% on inflated/wrong base
+MANAGEMENT FEES,Centralized Services,28000,fee_charged,exceeds 10k approval threshold per HMA 5.1
+MANAGEMENT FEES,Total Fees Charged,276200,fee_charged_total,

@@ -6,25 +6,23 @@ import type {
   Finding,
   RunAuditResponse,
 } from "@feeforensics/shared";
-import { DEMO_CASE_ID } from "./demoCase.js";
+import { DEMO_CASE_ID } from "./constants";
 
 /**
- * Mock audit result for the synthetic Harborline Hotel case.
+ * BUNDLED REPLAY — demo-safety fallback for the Harborline Hotel case.
  *
- * PURPOSE: unblock the frontend (Person B) with a realistic, contract-shaped
- * `RunAuditResponse` / `AuditReport` before the real agent exists. Every number
- * here is HAND-AUTHORED and SYNTHETIC — it is NOT computed. The deterministic
- * calculator + orchestrator (later PRs in packages/agent) will replace these
- * internals while keeping the same response shape.
+ * This is a hand-authored, contract-shaped snapshot of a good agent run. It is
+ * SYNTHETIC and NOT computed. The run/report pages replay it *silently* when the
+ * live API stalls (no first trace event in ~10s) or is unreachable, so a demo is
+ * never blocked by a slow inference call or a down backend (see docs/AppFlow.md §6).
  *
- * Numbers are the authoritative ground truth from data/demo/05_expected_answer.md:
- * the operator overstated June fees by $36,580 = $8,580 hard overcharge (F1 $1,980
- * + F2 $6,600) + $28,000 unsupported pending approval (F3). Confidence 96%.
+ * It is intentionally inlined (not imported from apps/api) so the replay survives
+ * even if the backend is offline. Keep it byte-faithful to the API's mock
+ * (apps/api/src/data/mockAudit.ts) and the ground truth in
+ * data/demo/05_expected_answer.md ($36,580 across three findings, confidence 96%).
  */
 
 const RUN_AT = "2026-07-04T12:00:00.000Z";
-
-// --- Citations -------------------------------------------------------------
 
 const cite = (
   documentId: string,
@@ -111,10 +109,10 @@ const findings: Finding[] = [
 
 const calculationResult: CalculationResult = {
   caseId: DEMO_CASE_ID,
-  expectedBaseFee: 104220, // 3.0% × $3,474,000 corrected Total Operating Revenue
-  expectedIncentiveFee: 135400, // 10% × $1,354,000 true GOP
-  expectedTotalFees: 239620, // base + incentive (correct centralized = $0 pending approval)
-  chargedTotalFees: 276200, // 106,200 base + 142,000 incentive + 28,000 centralized
+  expectedBaseFee: 104220,
+  expectedIncentiveFee: 135400,
+  expectedTotalFees: 239620,
+  chargedTotalFees: 276200,
   variance: 36580,
   lineItemImpacts: [
     {
@@ -256,9 +254,21 @@ const disputeEmail = {
     "Thank you,\n[Owner — Cascadia Hotel Owner LP]",
 };
 
-// --- Assembled report ------------------------------------------------------
+// --- Assembled fallbacks ---------------------------------------------------
 
-export const mockAuditReport: AuditReport = {
+/** Bundled `RunAuditResponse` replayed by the run page when the live run stalls. */
+export const CACHED_RUN: RunAuditResponse = {
+  caseId: DEMO_CASE_ID,
+  status: "completed",
+  trace,
+  findings,
+  memo: memoMarkdown,
+  emailDraft: disputeEmail,
+  confidence: 0.96,
+};
+
+/** Bundled `AuditReport` served by the report page when the live API is unreachable. */
+export const CACHED_REPORT: AuditReport = {
   id: "report_demo_hotel_001",
   caseId: DEMO_CASE_ID,
   executiveSummary:
@@ -270,14 +280,4 @@ export const mockAuditReport: AuditReport = {
   memoMarkdown,
   disputeEmail,
   createdAt: RUN_AT,
-};
-
-export const mockRunAuditResponse: RunAuditResponse = {
-  caseId: DEMO_CASE_ID,
-  status: "completed",
-  trace,
-  findings,
-  memo: memoMarkdown,
-  emailDraft: disputeEmail,
-  confidence: 0.96,
 };

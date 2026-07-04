@@ -6,17 +6,18 @@ import { cn, formatPercent } from "@/lib/utils";
 
 /**
  * Confidence shown as a number that expands to its heuristic components
- * (docs/AppFlow.md §7 / CLAUDE.md §confidence). NOTE: the API contract only
- * returns a single `confidence` number today, so the component breakdown below
- * is a static demo representation of the heuristic. TODO(contract): ask Person A
- * to return a `confidenceBreakdown` so these numbers are real, not illustrative.
+ * (docs/AppFlow.md §7 / CLAUDE.md §confidence). The component values are the
+ * authored ground truth for the Harborline case (data/demo/05_expected_answer.md):
+ * a visible SUM to 96, where F3's missing owner approval is the only deduction
+ * (evidence support 16/20). TODO(contract): once the API returns a
+ * `confidenceBreakdown`, drive these from the response instead of this constant.
  */
 const COMPONENTS = [
-  { label: "Clause found", points: 25, max: 25 },
-  { label: "Financial inputs found", points: 25, max: 25 },
-  { label: "Calculation variance clear", points: 21, max: 25 },
-  { label: "Cause explained by evidence", points: 15, max: 15 },
-  { label: "Prior-month support", points: 0, max: 10 },
+  { label: "Contract clarity", points: 25, max: 25 },
+  { label: "Data completeness", points: 25, max: 25 },
+  { label: "Calculation match", points: 20, max: 20 },
+  { label: "Evidence support", points: 16, max: 20 },
+  { label: "Prior-month consistency", points: 10, max: 10 },
 ];
 
 export function ConfidenceMeter({ confidence }: { confidence: number }) {

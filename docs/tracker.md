@@ -5,11 +5,11 @@
 | Area | Owner | Status | Notes |
 |---|---|---|---|
 | PRD/docs | Person C | Not started | Push early |
-| Demo data | Person C | Not started | Synthetic only |
+| Demo data | Person C | ✅ Landed | Synthetic case in `data/demo/` (Harborline, Jun vs May); ground truth $36,580 / 96% — see §4 |
 | Backend API | Person A | In progress | Skeleton + `/api/demo-case` (PR #3); mock `run-audit`/`report` (PR #4) |
 | Vultr inference | Person A | In progress | OpenAI-compatible client stub (PR #3); not yet in live path |
 | Retrieval | Person A | Not started | Needs citations |
-| Fee calculator | Person A | Done | Deterministic math in `packages/agent`; TDD, reproduces $18,750 |
+| Fee calculator | Person A | Done | Deterministic math in `packages/agent`; TDD (unit test still on old $18,750 fixture — re-base to Harborline $36,580) |
 | Frontend shell | Person B | ✅ Scaffolded | Next.js+TS+Tailwind on :3000, wired to live API (see §8) |
 | Agent trace UI | Person B | 🟡 Baseline | Staged reveal + LLM/TOOL badges + loop highlight; polish left |
 | Findings UI | Person B | 🟡 Baseline | Cards + check tags + $ impact + citations; polish left |
@@ -21,14 +21,18 @@
 
 ### Product / Data
 
-- [ ] Create synthetic Hotel Management Agreement
-- [ ] Create current month operating statement CSV
-- [ ] Create P&L CSV
-- [ ] Create revenue schedule CSV
-- [ ] Create prior month statements CSV
-- [ ] Create brand/system fee schedule
-- [ ] Write expected answer manually
-- [ ] Write pitch script
+Demo case landed in `data/demo/` (synthetic — see `data/demo/README.md`). Property:
+The Harborline Hotel, audit month June vs prior month May.
+
+- [x] Create synthetic Hotel Management Agreement — `01_HMA_excerpt.txt`
+- [x] Create current month operating statement CSV — `02_operating_statement_june.csv`
+- [x] Create P&L CSV — USALI operating statement above doubles as the P&L
+- [x] Create revenue schedule CSV — `02b_misc_income_breakout_june.csv` (Misc Income breakout)
+- [x] Create prior month statements CSV — `03_operating_statement_may.csv`
+- [x] Add support/approval pack — `04_support_invoice_pack.csv` (drives F3 re-retrieval loop)
+- [ ] Create brand/system fee schedule — not in this case (stretch scenario only)
+- [x] Write expected answer manually — `05_expected_answer.md`
+- [ ] Write pitch script — pending (`pitch/`)
 
 ### Backend
 
@@ -66,35 +70,48 @@
 - [x] No `.env` committed
 - [ ] README with demo instructions
 - [ ] Sources and acknowledgements
-- [ ] Clear note: all demo docs are synthetic
+- [x] Clear note: all demo docs are synthetic (`data/demo/README.md`)
 - [ ] Final commit pushed
 
 ## 3. Nice-to-Have Tasks
 
-- [ ] Upload flow
+- [x] Upload flow (UI + honest fallback to demo — see §8.5)
 - [ ] Vultr Object Storage upload
 - [ ] Vultr deployment
-- [ ] Export memo as PDF
+- [x] Export memo as PDF (print route — see §8.5)
 - [ ] More leakage scenarios
 - [ ] 21st.dev UI polish
 
 ## 4. Known Demo Case Expected Findings
 
-Use this section once synthetic data is created.
+✅ **Reconciled — the whole flow is on the Harborline numbers below.** The synthetic
+`data/demo/` ground truth (`05_expected_answer.md`) is now the single source of truth.
+The API mock (`apps/api/src/data/mockAudit.ts` + `demoCase.ts`), the bundled fallback
+(`apps/web/src/lib/cachedRun.ts`), the evidence viewer (`apps/web/src/lib/documents.ts`),
+and the `ConfidenceMeter` (now **96**) all render **$36,580 / 96%**. Only open item: the
+`packages/agent` calculator unit test still targets the old $18,750 fixture
+(`packages/agent/src/fixtures/grandHarborCase.ts`, PR #7) — re-base it to this case so the
+live path reproduces $36,580.
 
-The deterministic calculator (`packages/agent`, PR #7) now **reproduces these numbers in
-unit tests** from a synthetic fixture (`packages/agent/src/fixtures/grandHarborCase.ts`) —
-that fixture is the source of truth for the exact inputs. **Person C:** build the
-`data/demo/` financials to match that fixture (Room+F&B+Banquet = $2,000,000; banquet
-cancellation $200,000; insurance proceeds $81,250; operating expense $1,350,000; corporate
-IT support $3,000) so the live path reproduces these without the mock.
+### Authoritative — synthetic `data/demo/` ground truth (use this)
 
-| Finding | Expected Impact | Evidence | Status |
-|---|---:|---|---|
-| Banquet cancellation revenue in base-fee base | $6,000 | HMA §4.1(b) + operating statement | Calc reproduces (unit-tested); needs `data/demo/` |
-| Incentive fee on AGOP inflated by insurance proceeds | $9,750 | HMA §4.2 + operating statement | Calc reproduces (unit-tested); needs `data/demo/` |
-| Corporate support passed through without approval | $3,000 | HMA §6.3 + support pack | Calc reproduces (unit-tested); needs `data/demo/` |
-| **Total suspected overcharge** | **$18,750** | — | Confidence 86% |
+Property: The Harborline Hotel · Audit month June · Prior month May.
+
+| Finding | Impact | Type | Evidence | Detected by |
+|---|---:|---|---|---|
+| F1 — Excluded revenue (insurance + cancellation, $66k) in base-fee base | $1,980 | overcharge | HMA §4.3(a)/(c) + Misc Income breakout | Check 2 |
+| F2 — Incentive fee on inflated GOP (same $66k not backed out) | $6,600 | overcharge | HMA §4.2 + GOP | Check 3 |
+| F3 — Centralized services charged without required owner approval | $28,000 | unsupported | HMA §5.1 + missing `APPROVAL-0612-03` | Check 4 anomaly → Check 5 |
+| **Total identified fee issues** | **$36,580** | $8,580 overcharge + $28,000 unsupported | — | Confidence **96** |
+
+### Superseded — old Grand Harbor mock (PR #4 / PR #7 `grandHarborCase.ts`; replaced by the above, kept for history)
+
+| Finding | Expected Impact | Evidence |
+|---|---:|---|
+| Banquet cancellation revenue in base-fee base | $6,000 | HMA §4.1(b) + operating statement |
+| Incentive fee on AGOP inflated by insurance proceeds | $9,750 | HMA §4.2 + operating statement |
+| Corporate support passed through without approval | $3,000 | HMA §6.3 + support pack |
+| **Total suspected overcharge** | **$18,750** | Confidence 86% |
 
 ## 5. Merge Conflict Guardrails
 
@@ -174,8 +191,10 @@ remark-gfm · `@tailwindcss/typography`. Types imported from `@feeforensics/shar
 | `TraceRow` + `KindBadge` | Step row with LLM/TOOL badge, status, loop highlight | 🟡 |
 | `FindingCard` | Title, severity, **check attribution**, impact, citations | 🟡 |
 | `CalculationBreakdown` (table) | Expected vs charged vs variance | ✅ |
-| `CitationPill` | Clause/line label + quote (visible, no click) | ✅ |
-| `ConfidenceMeter` | 86% + expandable heuristic components (static — see §8.6) | 🟡 |
+| `CitationPill` | Clause/line label + quote; **clickable → opens source-doc drawer** | ✅ |
+| `EvidenceProvider` + `lib/documents.ts` | Slide-over drawer: citation → bundled source doc, exact clause/line highlighted | ✅ |
+| `DisputeBuilder` + `lib/disputePacket.ts` | Owner selects findings → tailored dispute email + downloadable packet; totals recompute from selection (sums calculator numbers) | ✅ |
+| `ConfidenceMeter` | **96** + expandable heuristic components (static, matches ground truth — see §8.6) | 🟡 |
 | `Markdown` | Memo renderer (GFM tables) | ✅ |
 | `CopyButton` / `DownloadButton` | Email copy / memo download | ✅ |
 | `ApiErrorPanel` | Friendly "API not running" fallback | ✅ |
@@ -195,8 +214,19 @@ remark-gfm · `@tailwindcss/typography`. Types imported from `@feeforensics/shar
 
 **Phase 2 — Fidelity / "agent, not RAG" proof** 🟡
 - [ ] Trace: connector rail between steps; smoother reveal timing/pauses
-- [ ] Trace: **cached fallback replay** — if no first step in ~10s, swap to a
-      bundled run silently (`docs/AppFlow.md` §6). *Highest demo-safety item.*
+- [x] Trace: **cached fallback replay** — run page races the live run vs a ~10s
+      stall guard; on timeout *or* unreachable API it replays the bundled run
+      silently (`lib/cachedRun.ts`, `docs/AppFlow.md` §6). Report page also serves
+      the bundled report on API failure, so the whole flow survives an outage.
+      *(Gap: `/cases/demo` overview still shows the retry panel if the API is down.)*
+- [x] **Evidence viewer** — citations are clickable; a drawer opens the bundled source
+      doc with the cited clause/line highlighted (`EvidenceProvider`, `lib/documents.ts`)
+- [x] **Dispute builder** — owner picks findings; a tailored email + downloadable packet
+      assemble from the selection (`DisputeBuilder`, `lib/disputePacket.ts`)
+- [x] **PDF export** — print-styled `/cases/demo/report/print` route + auto-print,
+      linked from the report as "Export PDF" (browser Save-as-PDF, zero deps)
+- [x] **Upload flow** — `/cases/new` accepts documents, attempts `POST /api/cases`,
+      falls back honestly to the demo case when the MVP backend has no endpoint
 - [ ] Findings: expandable confidence backed by real data once contract adds it (§8.6)
 - [ ] "Cannot assess — evidence missing" state for checks with no evidence
 - [ ] `error.tsx` + `not-found.tsx` boundaries; loading skeletons
@@ -211,7 +241,8 @@ remark-gfm · `@tailwindcss/typography`. Types imported from `@feeforensics/shar
 
 1. **`confidenceBreakdown`** — AppFlow §7 wants the confidence number to expand into
    its heuristic components. `Finding.confidence` is a bare number today, so
-   `ConfidenceMeter` shows a **static** breakdown. Ask A to return real components.
+   `ConfidenceMeter` shows a **static** breakdown (now hard-coded to the Harborline
+   96 = 25+25+20+16+10 from `05_expected_answer.md`). Ask A to return real components.
 2. **Finding → check link** — findings carry no `issueType`. The report currently
    **zips `findings` with `calculationResult.lineItemImpacts` by index** to derive the
    "Check N" tag (fragile). Ask A to add `issueType`/`checkLabel` onto `Finding`.

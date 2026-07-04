@@ -1,0 +1,22 @@
+section,line_item,amount,usali_layer,note
+OPERATING REVENUE,Rooms,2350000,operating_revenue,
+OPERATING REVENUE,Food & Beverage,805000,operating_revenue,
+OPERATING REVENUE,Other Operated Departments,175000,operating_revenue,
+OPERATING REVENUE,Miscellaneous Income,72000,operating_revenue,no excluded items this month - clean
+OPERATING REVENUE,Total Operating Revenue,3402000,operating_revenue_total,
+DEPARTMENTAL EXPENSES,Rooms,610000,departmental_expense,
+DEPARTMENTAL EXPENSES,Food & Beverage,580000,departmental_expense,
+DEPARTMENTAL EXPENSES,Other Operated Departments,92000,departmental_expense,
+DEPARTMENTAL EXPENSES,Total Departmental Expenses,1282000,departmental_expense_total,
+SUBTOTAL,Total Departmental Profit,2120000,departmental_profit,
+UNDISTRIBUTED OPERATING EXPENSES,Administrative & General,235000,undistributed_expense,
+UNDISTRIBUTED OPERATING EXPENSES,Information & Telecom Systems,84000,undistributed_expense,
+UNDISTRIBUTED OPERATING EXPENSES,Sales & Marketing,205000,undistributed_expense,
+UNDISTRIBUTED OPERATING EXPENSES,Property Operations & Maintenance,158000,undistributed_expense,
+UNDISTRIBUTED OPERATING EXPENSES,Utilities,118000,undistributed_expense,
+UNDISTRIBUTED OPERATING EXPENSES,Total Undistributed Expenses,800000,undistributed_expense_total,
+SUBTOTAL,Gross Operating Profit (GOP),1320000,gop,
+MANAGEMENT FEES,Base Management Fee,102060,fee_charged,3.0% of 3402000 - correctly calculated this month
+MANAGEMENT FEES,Incentive Management Fee,132000,fee_charged,10% of GOP 1320000 - correctly calculated this month
+MANAGEMENT FEES,Centralized Services,7500,fee_charged,below 10k threshold - normal - no approval needed
+MANAGEMENT FEES,Total Fees Charged,241560,fee_charged_total,
