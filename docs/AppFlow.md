@@ -190,3 +190,69 @@ Citation Trail
 Recommended Next Action
 Draft Email
 ```
+INPUTS (uploaded by user)
+   ┌──────────────┬───────────────────┬──────────────┬───────────────┐
+   │  HMA (PDF)   │ Current monthly   │ Prior-month  │ Support docs  │
+   │  contract    │ operating pkg     │ statement    │ (invoices,    │
+   │              │ (USALI P&L)       │              │  approvals)   │
+   └──────┬───────┴─────────┬─────────┴──────┬───────┴───────┬───────┘
+          │                 │                │               │
+          ▼                 ▼                │               │
+  ┌─────────────────────────────────────┐   │               │
+  │ STEP 0 — PLAN (LLM)                  │   │               │
+  │ Reads what was uploaded, identifies  │   │               │
+  │ which fee families are present.      │   │               │
+  │ out: audit scope list               │   │               │
+  └──────────────┬──────────────────────┘   │               │
+                 │                            │               │
+      ┌──────────┴───────────┐               │               │
+      ▼                      ▼               ▼               ▼
+┌───────────────┐   ┌──────────────────────────────────────────────┐
+│ LEGAL fn      │   │ ACCOUNTING fn                                │
+│ (LLM extract) │   │ (deterministic mapper)                       │
+│               │   │                                              │
+│ in: HMA text  │   │ in: operating statement lines                │
+│ does: pull    │   │ does: map each line to USALI schedule slot   │
+│  fee clauses  │   │  (departmental / undistributed / below-GOP)  │
+│ out: FeeRule  │   │ out: USALI-normalized statement              │
+│  JSON per fee │   │                                              │
+└──────┬────────┘   └───────────────────┬──────────────────────────┘
+       │                                │
+       │      (FeeRule)      (normalized statement + prior month + support)
+       └──────────────┬─────────────────┘
+                      ▼
+       ┌───────────────────────────────────────────────┐
+       │ FINANCE fn — THE 5 CHECKS (deterministic code) │
+       │                                                │
+       │ 1 Base recompute:  rate × defined base vs charged
+       │ 2 Inclusion check: base line-items vs contract exclusions
+       │ 3 GOP/AGOP check:  required deductions applied? (finite list)
+       │ 4 Drift check:     effective rate / base mix vs prior month
+       │ 5 Reclass check:   line landed in right USALI slot?
+       │                                                │
+       │ out: one Variance per fee (expected vs charged │
+       │      + which check fired + evidence refs)      │
+       └───────────────────┬───────────────────────────┘
+                           │   (if a line is ambiguous → loop back:
+                           │    retrieve support doc / prior month,
+                           │    re-run the affected check)
+                           ▼
+       ┌───────────────────────────────────────────────┐
+       │ DECISIONING fn (rules-based classifier)        │
+       │                                                │
+       │ in: each Variance + evidence                   │
+       │ does: classify → valid / overcharge /          │
+       │       unsupported / ambiguous / human-review   │
+       │       + compute confidence (deterministic sum) │
+       │ out: Finding[] with severity, $ impact,        │
+       │      citations, confidence                     │
+       └───────────────────┬───────────────────────────┘
+                           ▼
+       ┌───────────────────────────────────────────────┐
+       │ OUTPUT fn (LLM writes prose around fixed facts) │
+       │                                                │
+       │ out: • Fee audit memo (findings + $ + citations)
+       │      • Calculation appendix (the math)          │
+       │      • Draft dispute email to operator          │
+       │      • Confidence score (visible sum of parts)  │
+       └───────────────────────────────────────────────┘
