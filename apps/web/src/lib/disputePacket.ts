@@ -16,6 +16,28 @@ const PERIOD = "June 2026";
 const OPERATOR = "Meridian Hotel Management";
 const OWNER = "Cascadia Hotel Owner LP";
 
+/**
+ * Finding titles/explanations are LLM-influenced (derived from documents an
+ * adversary controls). This packet is downloaded / copied into an email the owner
+ * sends to the operator, so — unlike in-app React text — nothing escapes it for us.
+ * Neutralize markdown link/image syntax and control chars so injected content
+ * can't smuggle a clickable link or a hidden payment instruction into the artifact.
+ */
+function plain(s: string): string {
+  return s
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1") // unwrap md links/images, keep visible text
+    .replace(/[`*_>#]/g, "") // strip emphasis/heading markers
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\x00-\x1f\x7f]/g, " ") // control chars
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** As {@link plain}, but also escapes the pipe so it can't break a markdown table cell. */
+function cellText(s: string): string {
+  return plain(s).replace(/\|/g, "\\|");
+}
+
 export type DisputeKind = "overcharge" | "unsupported" | "review";
 
 /** Hard overcharges are disputed; everything else is unsupported/pending. */
@@ -73,11 +95,11 @@ export function buildMemo(selected: Finding[]): string {
   const rows = selected
     .map(
       (f, i) =>
-        `| ${i + 1} | ${f.title} | ${formatCurrency(f.suspectedImpact)} | ${disputeKind(f)} | ${shortClause(f)} | ${actionLabel(f)} |`,
+        `| ${i + 1} | ${cellText(f.title)} | ${formatCurrency(f.suspectedImpact)} | ${disputeKind(f)} | ${cellText(shortClause(f))} | ${actionLabel(f)} |`,
     )
     .join("\n");
   const basis = selected
-    .map((f, i) => `${i + 1}. **${f.title}** — ${f.explanation}`)
+    .map((f, i) => `${i + 1}. **${plain(f.title)}** — ${plain(f.explanation)}`)
     .join("\n");
 
   return `## Dispute Packet — ${HOTEL} (${PERIOD})
@@ -110,7 +132,7 @@ export function buildEmail(selected: Finding[]): DisputeEmail {
   const items = selected
     .map(
       (f, i) =>
-        `${i + 1}. ${f.title} — ${formatCurrency(f.suspectedImpact)} (${shortClause(f)}).`,
+        `${i + 1}. ${plain(f.title)} — ${formatCurrency(f.suspectedImpact)} (${plain(shortClause(f))}).`,
     )
     .join("\n");
 

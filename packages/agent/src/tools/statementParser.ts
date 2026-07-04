@@ -66,6 +66,35 @@ export function parseMoney(raw: string): number {
   return negative ? -value : value;
 }
 
+// --- Input bounds -----------------------------------------------------------
+
+/**
+ * Cap on raw CSV size. These are monthly operating statements (a few KB); a
+ * multi-MB input is a mistake or a memory-exhaustion attempt, not real data.
+ */
+const MAX_CSV_CHARS = 2 * 1024 * 1024;
+
+function assertBoundedInput(csv: string): void {
+  if (csv.length > MAX_CSV_CHARS) {
+    throw new Error(
+      `CSV input is too large (${csv.length} chars > ${MAX_CSV_CHARS} limit).`,
+    );
+  }
+}
+
+// --- Formula-injection guard ------------------------------------------------
+
+/**
+ * Neutralize a text cell before it is stored in a description/citation quote.
+ * A cell like `=HYPERLINK("http://evil","Rooms")` is a spreadsheet formula-
+ * injection payload if the report is ever exported to or pasted into a
+ * spreadsheet. Prefixing a single quote makes the tool treat it as text, which
+ * is the standard mitigation. Leaves normal line items untouched.
+ */
+function neutralizeFormula(text: string): string {
+  return /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+}
+
 // --- CSV tokenizer ----------------------------------------------------------
 
 function splitCsvLine(line: string): string[] {
@@ -99,6 +128,7 @@ function splitCsvLine(line: string): string[] {
 }
 
 function parseCsv(text: string): string[][] {
+  assertBoundedInput(text);
   return text
     .split(/\r?\n/)
     .filter((line) => line.trim() !== "")
@@ -199,11 +229,12 @@ function makeCitation(
   lineItem: string,
   rawAmount: string,
 ): Citation {
+  const safeItem = neutralizeFormula(lineItem);
   return {
     documentId: opts.sourceDocumentId,
     documentName: opts.documentName,
-    sectionLabel: section ? `${section} — ${lineItem}` : lineItem,
-    quote: `${lineItem}: ${rawAmount}`,
+    sectionLabel: section ? `${section} — ${safeItem}` : safeItem,
+    quote: `${safeItem}: ${rawAmount}`,
   };
 }
 
@@ -296,7 +327,7 @@ export function parseOperatingStatement(
       sourceDocumentId: opts.sourceDocumentId,
       period: opts.period,
       category: section || normalizedCategory,
-      description: lineItem,
+      description: neutralizeFormula(lineItem),
       amount,
       normalizedCategory,
       citation,
@@ -366,7 +397,7 @@ export function parseMiscIncomeBreakout(
       sourceDocumentId: opts.sourceDocumentId,
       period: opts.period,
       category: section,
-      description: lineItem,
+      description: neutralizeFormula(lineItem),
       amount,
       normalizedCategory,
       citation: makeCitation(opts, section, lineItem, rawAmount),

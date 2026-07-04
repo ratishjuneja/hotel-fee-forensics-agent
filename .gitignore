@@ -1,7 +1,10 @@
 # Environment / secrets — NEVER commit
+# Ignore every .env variant (.env, .env.local, .env.production, .env.development, …)
+# but keep the committed example templates.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+!.env.local.example
 *.pem
 *.key
 

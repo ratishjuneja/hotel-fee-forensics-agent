@@ -119,7 +119,19 @@ interface PendingChunk {
   body: string[];
 }
 
+/**
+ * Cap on raw document size. HMAs and operating packages are tens of KB; a
+ * multi-MB input is a mistake or a memory/context-exhaustion attempt. Bounding it
+ * here transitively bounds every downstream prompt built from these chunks.
+ */
+const MAX_DOCUMENT_CHARS = 5 * 1024 * 1024;
+
 export function chunkText(text: string, ctx: ChunkContext): DocumentChunk[] {
+  if (text.length > MAX_DOCUMENT_CHARS) {
+    throw new Error(
+      `Document is too large (${text.length} chars > ${MAX_DOCUMENT_CHARS} limit).`,
+    );
+  }
   const prefix = ctx.citationPrefix ?? "Doc";
   const lines = text.split(/\r?\n/);
 

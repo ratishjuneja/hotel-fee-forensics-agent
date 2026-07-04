@@ -1,6 +1,8 @@
 import Fastify from "fastify";
+import type { FastifyError } from "fastify";
 import cors from "@fastify/cors";
 import { corsOrigins, env, isVultrConfigured } from "./config/env.js";
+import { createRateLimiter } from "./lib/rateLimit.js";
 import { healthRoutes } from "./routes/health.js";
 import { demoCaseRoutes } from "./routes/demoCase.js";
 import { auditRoutes } from "./routes/audit.js";
@@ -10,9 +12,36 @@ export async function buildServer() {
     logger: {
       level: env.NODE_ENV === "development" ? "info" : "warn",
     },
+    // Bound request bodies — the demo posts tiny payloads; anything large is abuse.
+    bodyLimit: 256 * 1024,
   });
 
   await app.register(cors, { origin: corsOrigins });
+
+  // Basic security headers on every response (no extra dependency).
+  app.addHook("onSend", async (_request, reply, payload) => {
+    reply.header("x-content-type-options", "nosniff");
+    reply.header("x-frame-options", "DENY");
+    reply.header("referrer-policy", "no-referrer");
+    reply.header("cross-origin-resource-policy", "same-origin");
+    return payload;
+  });
+
+  // Throttle every request per-IP so the expensive audit route can't be looped to
+  // drain Vultr credits. Generous enough for the demo's handful of calls.
+  app.addHook("onRequest", createRateLimiter({ windowMs: 60_000, max: 60 }));
+
+  // Don't leak internals: log the real error server-side, return a generic message.
+  // Known 4xx client errors (bad route/validation) keep their safe message.
+  app.setErrorHandler((error: FastifyError, _request, reply) => {
+    const status = error.statusCode ?? 500;
+    app.log.error(error);
+    if (status < 500) {
+      reply.code(status).send({ error: "request_error", message: error.message });
+    } else {
+      reply.code(500).send({ error: "internal_error", message: "Internal server error." });
+    }
+  });
 
   await app.register(healthRoutes);
   await app.register(demoCaseRoutes);
