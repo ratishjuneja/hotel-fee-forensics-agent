@@ -1,7 +1,9 @@
 /**
  * @feeforensics/agent — audit orchestrator and deterministic tools.
  *
- * Public surface grows as tools land. First tool: the deterministic fee
- * calculator (all fee arithmetic happens here, never in the LLM).
+ * Public surface grows as tools land. Deterministic fee calculator (all fee
+ * arithmetic happens here, never in the LLM) + the CSV statement parser that
+ * feeds it structured line items from the operator's statements.
  */
 export * from "./tools/feeCalculator.js";
+export * from "./tools/statementParser.js";
