@@ -44,9 +44,11 @@ orchestrator in `packages/agent` runs the 10-step traced audit loop (plan → re
 clauses → retrieve exclusions → extract rules → deterministic recompute → anomaly checks
 → conditional re-retrieval of prior month + support pack → evidence check → decide +
 confidence → memo/email) and reproduces the $36,580 / 96% ground truth from the synthetic
-documents in `data/demo/`. `POST run-audit` executes that pipeline live, with Vultr
-Serverless Inference as the injected LLM boundary (the model extracts, selects, and
-writes prose — all arithmetic is deterministic code), and the frontend demo flow (case
+documents in `data/demo/`. `POST run-audit` executes that pipeline live on Vultr
+Serverless Inference, and the pipeline's **only model is VultronRetrieverPrime**
+(Vultr's dedicated retrieval model, via `/v1/rerank`): it scores the clauses behind
+every citation, while rule extraction, fee math, decisions, and the memo/email are
+deterministic, fully-cited code. The frontend demo flow (case
 overview → agent trace → findings → memo → dispute email) runs end-to-end. Remaining:
 a live end-to-end smoke against real Vultr inference, demo polish, and the pitch. See
 [`docs/tracker.md`](docs/tracker.md) for live status.

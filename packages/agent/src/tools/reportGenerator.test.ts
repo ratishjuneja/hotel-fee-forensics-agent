@@ -295,3 +295,18 @@ describe("generateReport — clean audit", () => {
     expect(report.disputeEmail.subject.toLowerCase()).toContain("no fee issues");
   });
 });
+
+// --- No generation model at all (VultronRetriever-only pipeline) -------------------
+
+describe("generateReport — no LLM wired (deterministic prose is primary, not a fallback)", () => {
+  it("renders the cited memo, template prose, and email with ZERO warnings", async () => {
+    const { report, warnings } = await generateReport(harborlineInput, { now: () => NOW });
+
+    expect(warnings).toEqual([]);
+    expect(report.executiveSummary).toContain("$36,580");
+    expect(report.memoMarkdown).toContain("APPROVAL-0612-03");
+    expect(report.memoMarkdown).toContain("$36,580");
+    expect(report.disputeEmail.subject).toContain("$36,580");
+    expect(report.disputeEmail.body).toContain("Meridian Hotel Management");
+  });
+});

@@ -58,6 +58,16 @@ export const isVultrConfigured = Boolean(
     env.VULTR_INFERENCE_MODEL,
 );
 
+/**
+ * The audit pipeline's ONE required model: the VultronRetriever reranker.
+ * (VULTR_INFERENCE_MODEL / chat is optional side infrastructure.)
+ */
+export const isRankerConfigured = Boolean(
+  env.VULTR_INFERENCE_API_KEY &&
+    env.VULTR_INFERENCE_BASE_URL &&
+    env.VULTR_INFERENCE_RETRIEVER_MODEL,
+);
+
 export const corsOrigins = env.CORS_ORIGIN.split(",")
   .map((o) => o.trim())
   .filter(Boolean);

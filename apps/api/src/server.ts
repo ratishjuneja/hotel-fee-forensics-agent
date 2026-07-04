@@ -2,9 +2,9 @@ import { pathToFileURL } from "node:url";
 import Fastify from "fastify";
 import type { FastifyError } from "fastify";
 import cors from "@fastify/cors";
-import type { OrchestratorLlm } from "@feeforensics/agent";
-import { corsOrigins, env, isVultrConfigured } from "./config/env.js";
-import { createAuditLlm } from "./lib/llm.js";
+import type { ChunkRanker } from "@feeforensics/agent";
+import { corsOrigins, env, isRankerConfigured } from "./config/env.js";
+import { createAuditRanker } from "./lib/llm.js";
 import { createRateLimiter } from "./lib/rateLimit.js";
 import { healthRoutes } from "./routes/health.js";
 import { demoCaseRoutes } from "./routes/demoCase.js";
@@ -12,11 +12,12 @@ import { auditRoutes } from "./routes/audit.js";
 
 export interface BuildServerOptions {
   /**
-   * LLM transport for the audit agent. Omit for the default (live Vultr
-   * `chatComplete` when configured, otherwise null → run-audit 503s). Tests
-   * inject a scripted fake here so no VULTR_* env vars are needed.
+   * The audit pipeline's one model: a VultronRetriever reranker. Omit for the
+   * default (live Vultr /v1/rerank when configured, otherwise null →
+   * run-audit 503s). Tests inject a scripted fake here so no VULTR_* env vars
+   * are needed.
    */
-  llm?: OrchestratorLlm | null;
+  ranker?: ChunkRanker | null;
 }
 
 export async function buildServer(options: BuildServerOptions = {}) {
@@ -58,7 +59,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
   await app.register(healthRoutes);
   await app.register(demoCaseRoutes);
   await app.register(auditRoutes, {
-    llm: options.llm !== undefined ? options.llm : createAuditLlm(),
+    ranker: options.ranker !== undefined ? options.ranker : createAuditRanker(),
   });
 
   return app;
@@ -68,9 +69,11 @@ async function start() {
   const app = await buildServer();
   try {
     await app.listen({ port: env.PORT, host: env.HOST });
-    if (!isVultrConfigured) {
+    if (!isRankerConfigured) {
       app.log.warn(
-        "Vultr inference is NOT configured — /api/demo-case works, but audit runs will fail until VULTR_* env vars are set.",
+        "VultronRetriever is NOT configured — /api/demo-case works, but audit runs will fail " +
+          "until VULTR_INFERENCE_API_KEY, VULTR_INFERENCE_BASE_URL and " +
+          "VULTR_INFERENCE_RETRIEVER_MODEL are set.",
       );
     }
   } catch (err) {

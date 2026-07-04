@@ -1,4 +1,4 @@
-import { env, isVultrConfigured } from "../config/env.js";
+import { env, isRankerConfigured, isVultrConfigured } from "../config/env.js";
 
 /**
  * Minimal Vultr Serverless Inference client.
@@ -105,14 +105,61 @@ export async function chatComplete(
   return data.choices?.[0]?.message?.content ?? "";
 }
 
+interface RerankResponse {
+  results?: Array<{ index?: number; relevance_score?: number }>;
+}
+
+/**
+ * Score `documents` against `query` on a VultronRetriever model via Vultr's
+ * /v1/rerank endpoint. These are retrieval models (late-interaction scorers) —
+ * they don't serve /chat/completions at all, which is why retrieval rides this
+ * endpoint while generation rides chatComplete.
+ */
+export async function rerank(
+  query: string,
+  documents: string[],
+  options: { model: string; signal?: AbortSignal; timeoutMs?: number },
+): Promise<Array<{ index: number; score: number }>> {
+  // The model id arrives as a parameter, so only credentials are required here
+  // (isVultrConfigured additionally demands the chat model id, which the
+  // VultronRetriever-only pipeline doesn't need).
+  if (!env.VULTR_INFERENCE_API_KEY || !env.VULTR_INFERENCE_BASE_URL) {
+    throw new VultrNotConfiguredError();
+  }
+  const signal =
+    options.signal ?? AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+
+  const response = await fetch(`${env.VULTR_INFERENCE_BASE_URL}/rerank`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${env.VULTR_INFERENCE_API_KEY}`,
+    },
+    body: JSON.stringify({ model: options.model, query, documents }),
+    signal,
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "<no body>");
+    throw new VultrRequestError(response.status, body);
+  }
+
+  const data = (await response.json()) as RerankResponse;
+  return (data.results ?? [])
+    .filter((r) => typeof r.index === "number" && typeof r.relevance_score === "number")
+    .map((r) => ({ index: r.index!, score: r.relevance_score! }));
+}
+
 /** Non-secret status for health/diagnostics surfaces. */
 export function vultrStatus(): {
   configured: boolean;
+  rankerConfigured: boolean;
   model: string | null;
   retrieverModel: string | null;
 } {
   return {
     configured: isVultrConfigured,
+    rankerConfigured: isRankerConfigured,
     model: env.VULTR_INFERENCE_MODEL ?? null,
     retrieverModel: env.VULTR_INFERENCE_RETRIEVER_MODEL ?? null,
   };

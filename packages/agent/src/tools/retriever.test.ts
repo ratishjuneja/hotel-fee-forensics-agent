@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   RetrieverParseError,
+  rankRelevantChunks,
   retrieveRelevantChunks,
+  type ChunkRanker,
   type RetrieverLlm,
   type RetrieverMessage,
 } from "./retriever.js";
@@ -124,6 +126,101 @@ describe("retrieveRelevantChunks — model-driven retrieval", () => {
   it("short-circuits on an empty corpus without calling the model", async () => {
     const { fn, calls } = fakeLlm("[]");
     const result = await retrieveRelevantChunks("anything", [], { llm: fn });
+    expect(result).toEqual([]);
+    expect(calls).toHaveLength(0);
+  });
+});
+
+// --- Rank-based retrieval (VultronRetriever via /v1/rerank) ------------------------
+
+/**
+ * A fake VultronRetriever reranker: scores each document by naive keyword
+ * overlap with the query, echoing the live endpoint's shape (unbounded
+ * relevance scores, all indices returned, sorted descending).
+ */
+const keywordRanker = () => {
+  const calls: Array<{ query: string; documents: string[] }> = [];
+  const fn: ChunkRanker = async (query, documents) => {
+    calls.push({ query, documents });
+    const terms = query.toLowerCase().split(/\W+/).filter((t) => t.length > 3);
+    return documents
+      .map((doc, index) => ({
+        index,
+        score: terms.filter((t) => doc.toLowerCase().includes(t)).length,
+      }))
+      .sort((a, b) => b.score - a.score);
+  };
+  return { fn, calls };
+};
+
+describe("rankRelevantChunks — VultronRetriever rerank retrieval", () => {
+  it("splits a compound query on ';' and unions each sub-query's top chunks", async () => {
+    // Rerankers score single intents well and compound queries poorly — the
+    // live VultronRetrieverPrime dropped §9.2 below top-5 on the compound
+    // step-3 query but ranked it #1 for the lone "audit rights" sub-query.
+    const { fn, calls } = keywordRanker();
+    const result = await rankRelevantChunks(
+      "excluded insurance revenue; centralized approval",
+      CHUNKS,
+      { ranker: fn, topKPerQuery: 1 },
+    );
+
+    expect(calls.map((c) => c.query)).toEqual([
+      "excluded insurance revenue",
+      "centralized approval",
+    ]);
+    expect(result.map((r) => r.chunk.id).sort()).toEqual(["c2", "c3"]);
+  });
+
+  it("dedupes a chunk matched by several sub-queries, keeping its best score", async () => {
+    const { fn } = keywordRanker();
+    const result = await rankRelevantChunks(
+      "insurance exclusions; excluded cancellation revenue",
+      CHUNKS,
+      { ranker: fn, topKPerQuery: 1 },
+    );
+
+    const ids = result.map((r) => r.chunk.id);
+    expect(ids).toEqual([...new Set(ids)]);
+    expect(ids).toContain("c2");
+  });
+
+  it("caps each sub-query at topKPerQuery and sorts the union by score", async () => {
+    const { fn } = keywordRanker();
+    const result = await rankRelevantChunks("incentive fee revenue", CHUNKS, {
+      ranker: fn,
+      topKPerQuery: 2,
+    });
+
+    expect(result.length).toBeLessThanOrEqual(2);
+    const scores = result.map((r) => r.score);
+    expect([...scores].sort((a, b) => b - a)).toEqual(scores);
+  });
+
+  it("ignores out-of-range indices from the ranker", async () => {
+    const badRanker: ChunkRanker = async () => [
+      { index: 99, score: 9 },
+      { index: 1, score: 5 },
+    ];
+    const result = await rankRelevantChunks("incentive", CHUNKS, {
+      ranker: badRanker,
+      topKPerQuery: 2,
+    });
+    expect(result.map((r) => r.chunk.id)).toEqual(["c1"]);
+  });
+
+  it("propagates transport errors so the caller can fall back", async () => {
+    const failing: ChunkRanker = async () => {
+      throw new Error("rerank endpoint unreachable");
+    };
+    await expect(
+      rankRelevantChunks("anything", CHUNKS, { ranker: failing }),
+    ).rejects.toThrow("rerank endpoint unreachable");
+  });
+
+  it("returns [] for empty input without calling the ranker", async () => {
+    const { fn, calls } = keywordRanker();
+    const result = await rankRelevantChunks("anything", [], { ranker: fn });
     expect(result).toEqual([]);
     expect(calls).toHaveLength(0);
   });

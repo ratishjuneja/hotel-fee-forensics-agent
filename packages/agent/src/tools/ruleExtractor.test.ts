@@ -1,10 +1,15 @@
 import type { DocumentChunk } from "@feeforensics/shared";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
+import { chunkText } from "./documentParser.js";
 import { calculateFees } from "./feeCalculator.js";
 import {
   RuleExtractionError,
   extractFeeRules,
+  extractFeeRulesDeterministic,
   type LlmMessage,
   type RuleExtractorLlm,
 } from "./ruleExtractor.js";
@@ -284,5 +289,79 @@ describe("extractFeeRules — Harborline HMA", () => {
     await expect(
       extractFeeRules(CHUNKS, { llm: fn, documentName: DOCUMENT_NAME }),
     ).rejects.toBeInstanceOf(RuleExtractionError);
+  });
+});
+
+// --- Deterministic extraction (VultronRetriever-only pipeline) ---------------------
+
+describe("extractFeeRulesDeterministic — code-only clause parsing", () => {
+  const realChunks = () =>
+    chunkText(
+      readFileSync(
+        fileURLToPath(new URL("../../../../data/demo/01_HMA_excerpt.txt", import.meta.url)),
+        "utf8",
+      ),
+      { caseId: "case_demo_harborline_001", documentId: "doc_hma", citationPrefix: "HMA" },
+    );
+
+  it("parses the Harborline fee rules from the clause text alone — no model call", () => {
+    const { rules, warnings } = extractFeeRulesDeterministic(realChunks(), {
+      documentName: DOCUMENT_NAME,
+    });
+
+    expect(warnings).toEqual([]);
+    expect(rules.baseManagementFee).toMatchObject({
+      percentage: 0.03,
+      revenueBase: "Total Operating Revenue",
+    });
+    expect(rules.baseManagementFee!.excludedCategories).toEqual(
+      expect.arrayContaining(["INSURANCE_PROCEEDS", "CANCELLATION_REVENUE"]),
+    );
+    expect(rules.incentiveFee).toMatchObject({ percentage: 0.1, profitMetric: "GOP" });
+    expect(rules.passThroughRules?.approvalThreshold).toBe(10000);
+    expect(rules.auditRights?.correctionWindowDays).toBe(365);
+    // Everything cited to its clause.
+    expect(rules.baseManagementFee!.citation.sectionLabel).toContain("§4.1");
+    expect(rules.incentiveFee!.citation.sectionLabel).toContain("§4.2");
+    expect(rules.passThroughRules!.citation.sectionLabel).toContain("§5.1");
+    expect(rules.auditRights!.citation.sectionLabel).toContain("§9.2");
+  });
+
+  it("reproduces the $36,580 golden answer through the calculator", () => {
+    const { rules } = extractFeeRulesDeterministic(realChunks(), {
+      documentName: DOCUMENT_NAME,
+    });
+    const result = calculateFees({
+      caseId: HARBORLINE_CASE_ID,
+      rules,
+      lineItems: harborlineLineItems,
+      chargedFees: harborlineChargedFees,
+    });
+    expect(result.variance).toBe(36580);
+    expect(result.expectedTotalFees).toBe(239620);
+  });
+
+  it("omits a clause that is absent instead of inventing it", () => {
+    const withoutIncentive = realChunks().filter(
+      (c) => !/§4\.2/.test(c.citationLabel),
+    );
+    const { rules, warnings } = extractFeeRulesDeterministic(withoutIncentive, {
+      documentName: DOCUMENT_NAME,
+    });
+    expect(rules.incentiveFee).toBeUndefined();
+    expect(warnings.some((w) => /incentive/i.test(w))).toBe(true);
+    expect(rules.baseManagementFee).toBeDefined();
+  });
+
+  it("omits a rate-less fee clause instead of guessing a percentage", () => {
+    const chunks = [
+      chunk("hma_rateless", "HMA §4.1 — Base Management Fee",
+        "Owner shall pay Operator a Base Management Fee of an amount to be agreed."),
+    ];
+    const { rules, warnings } = extractFeeRulesDeterministic(chunks, {
+      documentName: DOCUMENT_NAME,
+    });
+    expect(rules.baseManagementFee).toBeUndefined();
+    expect(warnings.length).toBeGreaterThan(0);
   });
 });

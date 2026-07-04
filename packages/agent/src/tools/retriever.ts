@@ -188,3 +188,67 @@ export async function retrieveRelevantChunks(
   retrieved.sort((a, b) => b.score - a.score);
   return retrieved.slice(0, topK);
 }
+
+// --- Rank-based retrieval (VultronRetriever via /v1/rerank) --------------------
+
+/**
+ * Injected reranker transport: a VultronRetriever model served on Vultr's
+ * /v1/rerank endpoint. Takes one query plus the candidate documents' text and
+ * returns (index, relevance score) pairs — the model scores, it never
+ * generates, so there is no JSON prose to parse and nothing to hallucinate.
+ * Scores are raw relevance (unbounded), unlike the chat path's [0, 1].
+ */
+export type ChunkRanker = (
+  query: string,
+  documents: string[],
+) => Promise<Array<{ index: number; score: number }>>;
+
+export interface RankOptions {
+  ranker: ChunkRanker;
+  /** Chunks kept per sub-query before the union (default 2). */
+  topKPerQuery?: number;
+  /** Drop anything scored below this (default: keep all — rely on topK). */
+  minScore?: number;
+}
+
+/**
+ * Retrieval on the dedicated VultronRetriever reranker. A compound query like
+ * "excluded revenue; audit rights" is split on ";" and each intent is scored
+ * separately — late-interaction rerankers are precise on single intents and
+ * diluted by compound ones (observed live: §9.2 fell below top-5 on the
+ * compound query but ranked #1 for its own sub-query). The per-sub-query
+ * winners are unioned, deduped (best score wins), and sorted.
+ */
+export async function rankRelevantChunks(
+  query: string,
+  chunks: DocumentChunk[],
+  options: RankOptions,
+): Promise<RetrievedChunk[]> {
+  if (chunks.length === 0) return [];
+  const topKPerQuery = options.topKPerQuery ?? 2;
+  const minScore = options.minScore ?? -Infinity;
+  const subQueries = query
+    .split(";")
+    .map((q) => q.trim())
+    .filter(Boolean);
+
+  const documents = chunks.map((c) => c.text);
+  const best = new Map<string, RetrievedChunk>();
+  for (const subQuery of subQueries) {
+    const results = await options.ranker(subQuery, documents);
+    const kept = results
+      .filter((r) => Number.isInteger(r.index) && r.index >= 0 && r.index < chunks.length)
+      .filter((r) => r.score >= minScore)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, topKPerQuery);
+    for (const r of kept) {
+      const chunk = chunks[r.index]!;
+      const existing = best.get(chunk.id);
+      if (!existing || r.score > existing.score) {
+        best.set(chunk.id, { chunk, score: r.score });
+      }
+    }
+  }
+
+  return [...best.values()].sort((a, b) => b.score - a.score);
+}

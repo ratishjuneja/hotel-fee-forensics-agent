@@ -46,8 +46,11 @@ suggestion inside these lines.
   than once, extract structured rules, call deterministic tools, decide, and only then
   answer. An operational **agent trace** must be visible in the UI.
 - **Deterministic math, never LLM arithmetic.** The fee calculator does all arithmetic in
-  code. The LLM extracts rules and explains findings; it does not compute fees. Unit-test
-  the calculator against a known expected answer.
+  code. The pipeline's only model is a VultronRetriever reranker (hackathon requirement)
+  scoring document chunks for retrieval — it never generates. Rule extraction parses
+  clause text deterministically (rates, thresholds, windows, exclusion synonyms) and the
+  memo/email render from cited templates. Unit-test the calculator against a known
+  expected answer.
 - **Everything is cited.** Findings, memo claims, and calculations reference specific
   clauses and financial lines (e.g. `HMA §4.2 — Incentive Fee`). No unsupported claims.
 - **Don't hallucinate on missing data.** If a clause or financial input is absent, say
