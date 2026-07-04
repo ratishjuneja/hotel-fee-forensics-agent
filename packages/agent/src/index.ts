@@ -12,3 +12,4 @@ export * from "./tools/statementParser.js";
 export * from "./tools/documentParser.js";
 export * from "./tools/retriever.js";
 export * from "./tools/ruleExtractor.js";
+export * from "./tools/anomalyChecker.js";
