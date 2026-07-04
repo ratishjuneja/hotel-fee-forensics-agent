@@ -1,0 +1,86 @@
+import Link from "next/link";
+import {
+  ArrowRight,
+  Calculator,
+  FileSearch,
+  Quote,
+  ScrollText,
+  Upload,
+} from "lucide-react";
+
+const CAPABILITIES = [
+  {
+    icon: FileSearch,
+    title: "Reads the agreement",
+    body: "Retrieves base-fee, incentive, exclusion, and approval clauses from the HMA.",
+  },
+  {
+    icon: Calculator,
+    title: "Reruns the math",
+    body: "A deterministic calculator recomputes every fee — never LLM arithmetic.",
+  },
+  {
+    icon: ScrollText,
+    title: "Finds the leakage",
+    body: "Flags excluded revenue, inflated AGOP, and improper pass-throughs.",
+  },
+  {
+    icon: Quote,
+    title: "Cites everything",
+    body: "Produces a dispute-ready memo and email, each grounded in a clause + line.",
+  },
+];
+
+export default function LandingPage() {
+  return (
+    <div className="mx-auto max-w-6xl px-4">
+      <section className="grid gap-10 py-16 md:grid-cols-2 md:items-center md:py-24">
+        <div>
+          <span className="inline-flex items-center rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700 ring-1 ring-brand-100">
+            Owner-side hotel fee audit agent
+          </span>
+          <h1 className="mt-4 text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl">
+            Operators charge fees from formulas buried in the contract.
+            <span className="text-brand-600"> We rerun the math.</span>
+          </h1>
+          <p className="mt-5 max-w-xl text-lg text-slate-600">
+            FeeForensics investigates a hotel management agreement and monthly
+            operating package, finds fee leakage, and generates a cited,
+            dispute-ready audit memo — with a visible agent trace.
+          </p>
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            <Link
+              href="/cases/demo"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-brand-700"
+            >
+              Run Demo Audit
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+            <button
+              type="button"
+              disabled
+              title="Upload flow is out of scope for the demo"
+              className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg border border-slate-300 px-5 py-3 font-medium text-slate-400"
+            >
+              <Upload className="h-4 w-4" />
+              Upload Documents
+            </button>
+          </div>
+          <p className="mt-4 text-xs text-slate-500">
+            Built with Vultr Serverless Inference · Preloaded synthetic case
+          </p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          {CAPABILITIES.map(({ icon: Icon, title, body }) => (
+            <div key={title} className="card p-5">
+              <Icon className="h-6 w-6 text-brand-600" />
+              <h3 className="mt-3 font-semibold text-slate-900">{title}</h3>
+              <p className="mt-1 text-sm text-slate-600">{body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
