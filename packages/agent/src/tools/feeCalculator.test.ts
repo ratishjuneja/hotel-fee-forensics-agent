@@ -7,48 +7,53 @@ import { describe, expect, it } from "vitest";
 
 import { calculateFees, type FeeCalculatorInput } from "./feeCalculator.js";
 import {
-  GRAND_HARBOR_CASE_ID,
-  grandHarborChargedFees,
-  grandHarborLineItems,
-  grandHarborRules,
-} from "../fixtures/grandHarborCase.js";
+  HARBORLINE_CASE_ID,
+  harborlineChargedFees,
+  harborlineLineItems,
+  harborlineRules,
+} from "../fixtures/harborlineCase.js";
 
 const sumImpacts = (impacts: { amountImpact: number }[]) =>
   impacts.reduce((acc, i) => acc + i.amountImpact, 0);
 
-describe("calculateFees — Grand Harbor golden case", () => {
+describe("calculateFees — Harborline golden case ($36,580)", () => {
   const result = calculateFees({
-    caseId: GRAND_HARBOR_CASE_ID,
-    rules: grandHarborRules,
-    lineItems: grandHarborLineItems,
-    chargedFees: grandHarborChargedFees,
+    caseId: HARBORLINE_CASE_ID,
+    rules: harborlineRules,
+    lineItems: harborlineLineItems,
+    chargedFees: harborlineChargedFees,
   });
+
+  const totalBy = (t: string) =>
+    sumImpacts(result.lineItemImpacts.filter((i) => i.issueType === t));
 
   it("recomputes expected fees from the statement, not the charged amounts", () => {
-    expect(result.caseId).toBe(GRAND_HARBOR_CASE_ID);
-    expect(result.expectedBaseFee).toBe(60000); // 3% × $2,000,000 corrected GOR
-    expect(result.expectedIncentiveFee).toBe(18000); // 12% × ($650,000 − $500,000)
-    expect(result.expectedTotalFees).toBe(78000);
+    expect(result.caseId).toBe(HARBORLINE_CASE_ID);
+    expect(result.expectedBaseFee).toBe(104220); // 3.0% × $3,474,000 clean base
+    expect(result.expectedIncentiveFee).toBe(135400); // 10% × $1,354,000 true GOP
+    expect(result.expectedTotalFees).toBe(239620);
   });
 
-  it("reads charged fees and reports the $18,750 variance", () => {
-    expect(result.chargedTotalFees).toBe(96750); // 66,000 + 27,750 + 3,000
-    expect(result.variance).toBe(18750);
+  it("reads charged fees and reports the $36,580 variance", () => {
+    expect(result.chargedTotalFees).toBe(276200); // 106,200 + 142,000 + 28,000
+    expect(result.variance).toBe(36580);
   });
 
-  it("attributes the variance to the three MVP leakage scenarios", () => {
-    const byIssue = (t: string) =>
-      result.lineItemImpacts.find((i) => i.issueType === t);
+  it("attributes the variance to the three Harborline findings", () => {
+    // F1 — excluded revenue (insurance + cancellation, $66k) in the base fee.
+    expect(totalBy("EXCLUDED_REVENUE_INCLUDED")).toBe(1980); // 3.0% × $66,000
+    // F2 — incentive fee on GOP inflated by the same $66k.
+    expect(totalBy("INFLATED_PROFIT_METRIC")).toBe(6600); // 10% × $66,000
+    // F3 — centralized services passed through without §5.1 approval.
+    expect(totalBy("IMPROPER_PASS_THROUGH")).toBe(28000);
 
-    expect(byIssue("EXCLUDED_REVENUE_INCLUDED")?.amountImpact).toBe(6000);
-    expect(byIssue("INFLATED_PROFIT_METRIC")?.amountImpact).toBe(9750);
-    expect(byIssue("IMPROPER_PASS_THROUGH")?.amountImpact).toBe(3000);
+    // Hard overcharge $8,580 (F1 + F2) + unsupported $28,000 (F3) = $36,580.
+    expect(totalBy("EXCLUDED_REVENUE_INCLUDED") + totalBy("INFLATED_PROFIT_METRIC")).toBe(8580);
 
     // No unexplained residual on a fully-reconciled case.
     expect(
       result.lineItemImpacts.some((i) => i.issueType === "NEEDS_REVIEW"),
     ).toBe(false);
-    expect(result.lineItemImpacts).toHaveLength(3);
   });
 
   it("keeps the sum of impacts reconciled to the variance (invariant)", () => {

@@ -40,14 +40,27 @@ const BASE_REVENUE_CATEGORIES = new Set<NormalizedCategory>([
   "FNB_REVENUE",
   "BANQUET_REVENUE",
 ]);
-/** Revenue categories excluded from the base-fee revenue base (e.g. HMA §4.1(b)). */
-const EXCLUDED_BASE_CATEGORIES = new Set<NormalizedCategory>(["CANCELLATION_REVENUE"]);
+/** Default categories excluded from the base-fee revenue base (e.g. HMA §4.1(b)). */
+const DEFAULT_EXCLUDED_BASE_CATEGORIES: NormalizedCategory[] = ["CANCELLATION_REVENUE"];
 
 /** Operating revenue counted toward the profit metric (AGOP). */
 const AGOP_REVENUE_CATEGORIES = BASE_REVENUE_CATEGORIES;
 const OPERATING_EXPENSE_CATEGORIES = new Set<NormalizedCategory>(["OPERATING_EXPENSE"]);
-/** Non-recurring / other income that must be deducted from AGOP (e.g. HMA §4.2). */
-const EXCLUDED_AGOP_CATEGORIES = new Set<NormalizedCategory>(["INSURANCE_PROCEEDS"]);
+/** Default non-recurring / other income deducted from AGOP (e.g. HMA §4.2). */
+const DEFAULT_EXCLUDED_AGOP_CATEGORIES: NormalizedCategory[] = ["INSURANCE_PROCEEDS"];
+
+/**
+ * The categories a rule strips are contract-specific: some HMAs exclude the same
+ * items (e.g. cancellation *and* insurance revenue) from both the base and the
+ * profit metric (Harborline §4.3). A rule may declare `excludedCategories`; when
+ * it doesn't, we fall back to the built-in default so existing cases are
+ * unaffected.
+ */
+const excludedSet = (
+  declared: NormalizedCategory[] | undefined,
+  fallback: NormalizedCategory[],
+): Set<NormalizedCategory> =>
+  new Set(declared && declared.length > 0 ? declared : fallback);
 
 // --- Money helpers ----------------------------------------------------------
 
@@ -88,10 +101,14 @@ export function computeBaseFee(
   const includedRevenue = sumBy(lineItems, BASE_REVENUE_CATEGORIES);
   const expectedFee = round2(rule.percentage * includedRevenue);
 
+  const excludedCategories = excludedSet(
+    rule.excludedCategories,
+    DEFAULT_EXCLUDED_BASE_CATEGORIES,
+  );
   const excludedItems =
     rule.excludedRevenue.length > 0
       ? lineItems.filter(
-          (i) => EXCLUDED_BASE_CATEGORIES.has(i.normalizedCategory) && i.amount !== 0,
+          (i) => excludedCategories.has(i.normalizedCategory) && i.amount !== 0,
         )
       : [];
 
@@ -126,10 +143,14 @@ export function computeIncentiveFee(
   const operatingExpense = sumBy(lineItems, OPERATING_EXPENSE_CATEGORIES);
   const baseAGOP = profitRevenue - operatingExpense;
 
+  const excludedCategories = excludedSet(
+    rule.excludedCategories,
+    DEFAULT_EXCLUDED_AGOP_CATEGORIES,
+  );
   const excludedItems =
     rule.excludedItems.length > 0
       ? lineItems.filter(
-          (i) => EXCLUDED_AGOP_CATEGORIES.has(i.normalizedCategory) && i.amount !== 0,
+          (i) => excludedCategories.has(i.normalizedCategory) && i.amount !== 0,
         )
       : [];
   const excludedTotal = excludedItems.reduce((acc, i) => acc + i.amount, 0);
