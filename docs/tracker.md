@@ -9,7 +9,7 @@
 | Backend API | Person A | In progress | Skeleton + `/api/demo-case` (PR #3); mock `run-audit`/`report` (PR #4) |
 | Vultr inference | Person A | In progress | OpenAI-compatible client stub (PR #3); not yet in live path |
 | Retrieval | Person A | Not started | Needs citations |
-| Fee calculator | Person A | Not started | Deterministic math |
+| Fee calculator | Person A | Done | Deterministic math in `packages/agent`; TDD, reproduces $18,750 |
 | Frontend shell | Person B | Not started | Demo-first |
 | Agent trace UI | Person B | Not started | Must prove agentic flow |
 | Findings UI | Person B | Not started | Dollar impact visible |
@@ -38,7 +38,7 @@
 - [ ] Add document chunker
 - [ ] Add retrieval tool
 - [ ] Add fee rule extractor
-- [ ] Add deterministic fee calculator
+- [x] Add deterministic fee calculator
 - [ ] Add anomaly checker
 - [ ] Add agent orchestrator
 - [ ] Add report generator
