@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import {
   runAudit,
+  type ChunkRanker,
   type OrchestratorLlm,
   type RunAuditResult,
 } from "@feeforensics/agent";
@@ -21,6 +22,12 @@ export interface AuditRouteOptions {
    * warnings, so a mid-demo inference hiccup never 500s.)
    */
   llm: OrchestratorLlm | null;
+  /**
+   * Retrieval transport: a VultronRetriever model on /v1/rerank. When present,
+   * all retrieval steps run on it (the primary-workflow requirement); null
+   * degrades retrieval to chat-model selection inside the agent.
+   */
+  ranker: ChunkRanker | null;
 }
 
 /** The API response keeps the mock-era contract shape and adds `warnings`. */
@@ -66,6 +73,7 @@ export async function auditRoutes(
 
       const { report, ...response } = await runAudit(loadDemoAuditInput(), {
         llm: options.llm,
+        ...(options.ranker ? { ranker: options.ranker } : {}),
       });
       reports.set(caseId, report);
       if (response.warnings.length > 0) {

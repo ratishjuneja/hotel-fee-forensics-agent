@@ -2,9 +2,9 @@ import { pathToFileURL } from "node:url";
 import Fastify from "fastify";
 import type { FastifyError } from "fastify";
 import cors from "@fastify/cors";
-import type { OrchestratorLlm } from "@feeforensics/agent";
+import type { ChunkRanker, OrchestratorLlm } from "@feeforensics/agent";
 import { corsOrigins, env, isVultrConfigured } from "./config/env.js";
-import { createAuditLlm } from "./lib/llm.js";
+import { createAuditLlm, createAuditRanker } from "./lib/llm.js";
 import { createRateLimiter } from "./lib/rateLimit.js";
 import { healthRoutes } from "./routes/health.js";
 import { demoCaseRoutes } from "./routes/demoCase.js";
@@ -17,6 +17,13 @@ export interface BuildServerOptions {
    * inject a scripted fake here so no VULTR_* env vars are needed.
    */
   llm?: OrchestratorLlm | null;
+  /**
+   * Retrieval transport (VultronRetriever via /v1/rerank). Omit for the
+   * default — but the default applies ONLY when `llm` is also default: an
+   * injected test llm must never be silently paired with a LIVE ranker from
+   * a developer's local .env.
+   */
+  ranker?: ChunkRanker | null;
 }
 
 export async function buildServer(options: BuildServerOptions = {}) {
@@ -57,9 +64,14 @@ export async function buildServer(options: BuildServerOptions = {}) {
 
   await app.register(healthRoutes);
   await app.register(demoCaseRoutes);
-  await app.register(auditRoutes, {
-    llm: options.llm !== undefined ? options.llm : createAuditLlm(),
-  });
+  const llm = options.llm !== undefined ? options.llm : createAuditLlm();
+  const ranker =
+    options.ranker !== undefined
+      ? options.ranker
+      : options.llm !== undefined
+        ? null
+        : createAuditRanker();
+  await app.register(auditRoutes, { llm, ranker });
 
   return app;
 }

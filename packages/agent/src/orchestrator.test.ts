@@ -317,6 +317,44 @@ describe("runAudit — golden end-to-end (real data/demo files)", () => {
   });
 });
 
+// --- Primary workflow on the VultronRetriever reranker (hackathon requirement) -----
+
+describe("runAudit — retrieval on the VultronRetriever reranker", () => {
+  // Retrieval must run on the sponsor's dedicated reranker model, not the chat
+  // model: the chat fake THROWS on any retrieval prompt, so this golden run
+  // passing proves the ranker path carries all three retrieval steps.
+  const ranker = async (query: string, documents: string[]) => {
+    const terms = query.toLowerCase().split(/\W+/).filter((t) => t.length > 2);
+    return documents
+      .map((doc, index) => ({
+        index,
+        score: terms.filter((t) => doc.toLowerCase().includes(t)).length,
+      }))
+      .sort((a, b) => b.score - a.score);
+  };
+  const llm: OrchestratorLlm = async (messages) => {
+    const system = messages[0]?.content ?? "";
+    const user = messages[1]?.content ?? "";
+    if (system.includes("retrieval component")) {
+      throw new Error("retrieval must not use the chat model when a ranker is wired");
+    }
+    if (system.includes("planning component")) return "Verify fees against the HMA.";
+    if (system.includes("extract the fee terms")) return extractionResponse(user);
+    if (system.includes("draft two short pieces")) return proseResponse(user);
+    throw new Error(`unscripted prompt: ${system.slice(0, 60)}`);
+  };
+  const resultPromise = runAudit(harborlineInput(), { llm, ranker, now });
+
+  it("reproduces the golden answer with all retrieval on the reranker", async () => {
+    const result = await resultPromise;
+    expect(result.findings.map((f) => f.suspectedImpact)).toEqual([1980, 6600, 28000]);
+    expect(result.confidence).toBe(0.96);
+    expect(result.warnings).toEqual([]);
+    expect(result.trace.filter((s) => s.tool === "retriever")).toHaveLength(3);
+    expect(result.memo).toContain("APPROVAL-0612-03");
+  });
+});
+
 // --- Worst observed live behavior: retrieval drops §4.3, extraction sees no exclusions
 
 describe("runAudit — retrieval drops the exclusions clause (deterministic backstop)", () => {

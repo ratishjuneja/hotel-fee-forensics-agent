@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import type { LlmMessage, OrchestratorLlm } from "@feeforensics/agent";
+import type { ChunkRanker, LlmMessage, OrchestratorLlm } from "@feeforensics/agent";
 import type { AuditReport, Finding, RunAuditResponse } from "@feeforensics/shared";
 
 import { buildServer } from "../server.js";
@@ -130,6 +130,33 @@ function scriptedLlm(): OrchestratorLlm {
   };
 }
 
+/**
+ * Scripted VultronRetriever reranker (keyword overlap), mirroring the live
+ * /v1/rerank response shape. The golden test wires it through buildServer and
+ * makes the chat fake THROW on retrieval prompts — the pipeline completing
+ * golden proves the sponsor's retrieval model carries the primary workflow.
+ */
+const scriptedRanker: ChunkRanker = async (query, documents) => {
+  const terms = query.toLowerCase().split(/\W+/).filter((t) => t.length > 2);
+  return documents
+    .map((doc, index) => ({
+      index,
+      score: terms.filter((t) => doc.toLowerCase().includes(t)).length,
+    }))
+    .sort((a, b) => b.score - a.score);
+};
+
+function scriptedLlmNoRetrieval(): OrchestratorLlm {
+  const base = scriptedLlm();
+  return async (messages: LlmMessage[]) => {
+    const system = messages[0]?.content ?? "";
+    if (system.includes("retrieval component")) {
+      throw new Error("retrieval must run on the reranker, not the chat model");
+    }
+    return base(messages);
+  };
+}
+
 const runAuditUrl = (caseId: string) => `/api/cases/${caseId}/run-audit`;
 const reportUrl = (caseId: string) => `/api/cases/${caseId}/report`;
 
@@ -140,7 +167,8 @@ describe("POST /api/cases/:caseId/run-audit — real pipeline (scripted LLM)", (
   let body: AuditRouteBody;
 
   beforeAll(async () => {
-    app = await buildServer({ llm: scriptedLlm() });
+    // Chat fake throws on retrieval prompts; the ranker must carry steps 2/3/7.
+    app = await buildServer({ llm: scriptedLlmNoRetrieval(), ranker: scriptedRanker });
     const res = await app.inject({ method: "POST", url: runAuditUrl(DEMO_CASE_ID) });
     expect(res.statusCode).toBe(200);
     body = res.json();

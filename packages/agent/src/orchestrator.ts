@@ -51,7 +51,12 @@ import {
 import { chunkText } from "./tools/documentParser.js";
 import { calculateFees } from "./tools/feeCalculator.js";
 import { generateReport } from "./tools/reportGenerator.js";
-import { retrieveRelevantChunks } from "./tools/retriever.js";
+import {
+  rankRelevantChunks,
+  retrieveRelevantChunks,
+  type ChunkRanker,
+  type RetrievedChunk,
+} from "./tools/retriever.js";
 import { extractFeeRules, type LlmMessage } from "./tools/ruleExtractor.js";
 import {
   parseMiscIncomeBreakout,
@@ -103,6 +108,13 @@ export interface RunAuditInput {
 
 export interface RunAuditDeps {
   llm: OrchestratorLlm;
+  /**
+   * Dedicated retrieval model (a VultronRetriever flavor on Vultr's /v1/rerank).
+   * When wired, ALL retrieval steps (2, 3, and the step-7 loop) run on it — the
+   * hackathon's primary-workflow requirement — with the chat model only as a
+   * degraded fallback. Omit to select chunks via the chat transport.
+   */
+  ranker?: ChunkRanker;
   /** Injectable clock for deterministic tests. */
   now?: () => string;
 }
@@ -330,12 +342,29 @@ export async function runAudit(
     citationPrefix: "HMA",
   });
 
+  // Retrieval boundary: the VultronRetriever reranker when wired (scores, never
+  // generates — nothing to parse), falling back to chat selection with a
+  // warning. Callers keep their own last-resort supersets below.
+  const selectChunks = async (
+    query: string,
+    candidates: DocumentChunk[],
+  ): Promise<RetrievedChunk[]> => {
+    if (deps.ranker) {
+      try {
+        return await rankRelevantChunks(query, candidates, { ranker: deps.ranker });
+      } catch (err) {
+        warnings.push(
+          `Retriever ("${query}"): rerank call failed (${errorMessage(err)}) — ` +
+            "falling back to chat-model selection.",
+        );
+      }
+    }
+    return retrieveRelevantChunks(query, candidates, { llm: deps.llm, topK: 6 });
+  };
+
   const retrieveClauses = async (title: string, query: string): Promise<DocumentChunk[]> => {
     try {
-      const retrieved = await retrieveRelevantChunks(query, hmaChunks, {
-        llm: deps.llm,
-        topK: 6,
-      });
+      const retrieved = await selectChunks(query, hmaChunks);
       const labels = retrieved.map((r) => r.chunk.citationLabel).join(", ");
       addStep({
         title,
@@ -608,10 +637,9 @@ export async function runAudit(
     let selectedRecords = pack.records;
     let step7Status: AgentTraceStep["status"] = "completed";
     try {
-      const picked = await retrieveRelevantChunks(
+      const picked = await selectChunks(
         `supporting invoice and prior written owner approval for: ${subjects.join(", ")}; prior-month baseline`,
         recordChunks,
-        { llm: deps.llm, topK: 6 },
       );
       if (picked.length > 0) {
         selectedRecords = picked
