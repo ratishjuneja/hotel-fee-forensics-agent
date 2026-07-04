@@ -91,7 +91,7 @@ function assertBoundedInput(csv: string): void {
  * spreadsheet. Prefixing a single quote makes the tool treat it as text, which
  * is the standard mitigation. Leaves normal line items untouched.
  */
-function neutralizeFormula(text: string): string {
+export function neutralizeFormula(text: string): string {
   return /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
 }
 
@@ -127,7 +127,8 @@ function splitCsvLine(line: string): string[] {
   return cells.map((c) => c.trim());
 }
 
-function parseCsv(text: string): string[][] {
+/** Bounded, quote-aware CSV tokenizer (shared with the support-pack parser). */
+export function parseCsv(text: string): string[][] {
   assertBoundedInput(text);
   return text
     .split(/\r?\n/)
