@@ -1,0 +1,288 @@
+/**
+ * FeeForensics shared type contract (v1).
+ *
+ * Source of truth for the data model is docs/Schema.md. These types are the
+ * agreed API/UI contract between the backend (Person A) and frontend (Person B).
+ * Treat this file as freeze-v1: coordinate before changing shapes other code
+ * already depends on (see docs/Workflow.md §6).
+ *
+ * NOTE ON DOCUMENT SET: docs/AppFlow.md was refined to an audited set of four
+ * documents (HMA, Monthly Operating Statement, Prior-Month Statement, Support /
+ * Invoice Pack) with P&L and revenue detail living *inside* the operating
+ * package. `DocumentType` follows that newer model and adds `SUPPORT_PACK`.
+ * docs/Schema.md still lists the older 7-type enum and needs a resync by the
+ * docs owner (Person C).
+ */
+
+// ---------------------------------------------------------------------------
+// Documents
+// ---------------------------------------------------------------------------
+
+export type DocumentType =
+  | "HMA"
+  | "OPERATING_STATEMENT"
+  | "PRIOR_MONTH"
+  | "SUPPORT_PACK";
+
+/** Whether a document drives the audit or is only shown for reference. */
+export type DocumentRole = "audited" | "reference";
+
+export type DocumentStatus = "loaded" | "parsed" | "failed";
+
+export interface DocumentRef {
+  id: string;
+  caseId: string;
+  name: string;
+  type: DocumentType;
+  role: DocumentRole;
+  /** One-line description of why this document is in the case. */
+  purpose: string;
+  storagePath: string;
+  parsedTextPath?: string;
+  status: DocumentStatus;
+}
+
+export interface DocumentChunk {
+  id: string;
+  documentId: string;
+  caseId: string;
+  text: string;
+  page?: number;
+  sectionLabel?: string;
+  /** Human-readable citation label, e.g. "HMA §4.2 Incentive Fee". */
+  citationLabel: string;
+}
+
+// ---------------------------------------------------------------------------
+// Case
+// ---------------------------------------------------------------------------
+
+export type CaseStatus = "created" | "running" | "completed" | "failed";
+
+export interface Case {
+  id: string;
+  hotelName: string;
+  auditMonth: string;
+  status: CaseStatus;
+  documents: DocumentRef[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Citations
+// ---------------------------------------------------------------------------
+
+export interface Citation {
+  documentId: string;
+  documentName: string;
+  chunkId?: string;
+  page?: number;
+  sectionLabel?: string;
+  quote?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Fee rules (extracted from the HMA)
+// ---------------------------------------------------------------------------
+
+export type ProfitMetric = "GOP" | "AGOP" | "NOI";
+
+export interface FeeRules {
+  baseManagementFee?: {
+    percentage: number;
+    revenueBase: string;
+    excludedRevenue: string[];
+    citation: Citation;
+  };
+  incentiveFee?: {
+    percentage: number;
+    profitMetric: ProfitMetric;
+    threshold?: number;
+    ownerPriorityReturn?: number;
+    excludedItems: string[];
+    citation: Citation;
+  };
+  passThroughRules?: {
+    allowedCategories: string[];
+    excludedCategories: string[];
+    approvalThreshold?: number;
+    citation: Citation;
+  };
+  auditRights?: {
+    exists: boolean;
+    correctionWindowDays?: number;
+    citation: Citation;
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Financial inputs
+// ---------------------------------------------------------------------------
+
+export type NormalizedCategory =
+  | "ROOM_REVENUE"
+  | "FNB_REVENUE"
+  | "BANQUET_REVENUE"
+  | "CANCELLATION_REVENUE"
+  | "INSURANCE_PROCEEDS"
+  | "OPERATING_EXPENSE"
+  | "CORPORATE_OVERHEAD"
+  | "BRAND_FEE"
+  | "MANAGEMENT_FEE"
+  | "OTHER";
+
+export interface FinancialLineItem {
+  id: string;
+  caseId: string;
+  sourceDocumentId: string;
+  period: string;
+  category: string;
+  description: string;
+  amount: number;
+  normalizedCategory: NormalizedCategory;
+  citation: Citation;
+}
+
+export type ChargedFeeType =
+  | "BASE_MANAGEMENT_FEE"
+  | "INCENTIVE_MANAGEMENT_FEE"
+  | "BRAND_SYSTEM_FEE"
+  | "PASS_THROUGH_EXPENSE";
+
+export interface ChargedFee {
+  id: string;
+  caseId: string;
+  feeType: ChargedFeeType;
+  chargedAmount: number;
+  period: string;
+  citation: Citation;
+}
+
+// ---------------------------------------------------------------------------
+// Calculation results (deterministic calculator output)
+// ---------------------------------------------------------------------------
+
+export type IssueType =
+  | "EXCLUDED_REVENUE_INCLUDED"
+  | "INFLATED_PROFIT_METRIC"
+  | "IMPROPER_PASS_THROUGH"
+  | "APPROVAL_THRESHOLD_EXCEEDED"
+  | "NEEDS_REVIEW";
+
+export interface LineItemImpact {
+  issueType: IssueType;
+  description: string;
+  amountImpact: number;
+  relatedLineItems: string[];
+  citations: Citation[];
+}
+
+export interface CalculationResult {
+  caseId: string;
+  expectedBaseFee: number;
+  expectedIncentiveFee: number;
+  expectedTotalFees: number;
+  chargedTotalFees: number;
+  variance: number;
+  lineItemImpacts: LineItemImpact[];
+}
+
+// ---------------------------------------------------------------------------
+// Findings
+// ---------------------------------------------------------------------------
+
+export type Severity = "high" | "medium" | "low" | "review";
+
+export type RecommendedAction =
+  | "dispute"
+  | "request_explanation"
+  | "approve"
+  | "human_review";
+
+export interface Finding {
+  id: string;
+  caseId: string;
+  title: string;
+  severity: Severity;
+  suspectedImpact: number;
+  explanation: string;
+  recommendedAction: RecommendedAction;
+  citations: Citation[];
+  confidence: number;
+}
+
+// ---------------------------------------------------------------------------
+// Agent trace
+// ---------------------------------------------------------------------------
+
+export type AgentTool =
+  | "planner"
+  | "retriever"
+  | "rule_extractor"
+  | "fee_calculator"
+  | "anomaly_checker"
+  | "decision_engine"
+  | "report_generator";
+
+/** Whether a trace step is model reasoning or deterministic code. */
+export type TraceStepKind = "LLM" | "TOOL";
+
+export type TraceStepStatus = "completed" | "warning" | "failed";
+
+export interface AgentTraceStep {
+  id: string;
+  caseId: string;
+  stepNumber: number;
+  title: string;
+  tool: AgentTool;
+  kind: TraceStepKind;
+  inputSummary: string;
+  outputSummary: string;
+  status: TraceStepStatus;
+  evidenceCount?: number;
+  timestamp: string;
+}
+
+// ---------------------------------------------------------------------------
+// Report
+// ---------------------------------------------------------------------------
+
+export interface DisputeEmail {
+  subject: string;
+  body: string;
+}
+
+export interface AuditReport {
+  id: string;
+  caseId: string;
+  executiveSummary: string;
+  totalSuspectedOvercharge: number;
+  confidence: number;
+  findings: Finding[];
+  calculationResult: CalculationResult;
+  memoMarkdown: string;
+  disputeEmail: DisputeEmail;
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// API response shapes
+// ---------------------------------------------------------------------------
+
+/** Response body for GET /api/demo-case. */
+export interface DemoCaseResponse {
+  case: Case;
+  expectedOutputs: string[];
+}
+
+/** Response body for POST /api/cases/:caseId/run-audit. */
+export interface RunAuditResponse {
+  caseId: string;
+  status: CaseStatus;
+  trace: AgentTraceStep[];
+  findings: Finding[];
+  memo: string;
+  emailDraft: DisputeEmail;
+  confidence: number;
+}
