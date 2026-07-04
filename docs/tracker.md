@@ -39,6 +39,7 @@ The Harborline Hotel, audit month June vs prior month May.
 - [x] Create API skeleton
 - [x] Create Vultr inference client (stub; not yet wired into a live path)
 - [x] Add demo case endpoint
+- [x] Add CSV statement parser (`packages/agent` `statementParser.ts`: data/demo operating statement + misc breakout → `FinancialLineItem[]` + `ChargedFee[]`; tolerant headers/currency, category synonym map, unknown→OTHER+warning)
 - [ ] Add document chunker
 - [ ] Add retrieval tool
 - [ ] Add fee rule extractor
