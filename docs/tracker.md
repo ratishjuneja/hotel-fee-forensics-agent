@@ -42,7 +42,7 @@ The Harborline Hotel, audit month June vs prior month May.
 - [x] Add CSV statement parser (`packages/agent` `statementParser.ts`: data/demo operating statement + misc breakout → `FinancialLineItem[]` + `ChargedFee[]`; tolerant headers/currency, category synonym map, unknown→OTHER+warning)
 - [x] Add document parser + clause-aware chunker (`packages/agent` `documentParser.ts`: .md/.txt/digital-.pdf → `DocumentChunk[]` with citation labels like `HMA §4.2 — Incentive Management Fee`; PDF via injected extractor, scanned-PDF rejected clearly)
 - [x] Add retrieval tool (`packages/agent` `retriever.ts`: model-driven chunk selection via a VultronRetriever chat model — injected `RetrieverLlm` boundary; ranks by model score, drops hallucinated indices, tolerant JSON, topK/minScore)
-- [ ] Add fee rule extractor
+- [x] Add fee rule extractor (`packages/agent` `ruleExtractor.ts`: HMA chunks → `FeeRules` on a VultronRetriever model — injected LLM boundary, zod-validated envelope; LLM extracts, code normalizes `3.0%`→`0.03` (never computes); each rule cited to its chunk; missing clause omitted not invented; extracted rules feed the calculator to reproduce $36,580)
 - [x] Add deterministic fee calculator
 - [ ] Add anomaly checker
 - [ ] Add agent orchestrator
