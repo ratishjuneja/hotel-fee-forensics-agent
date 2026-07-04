@@ -40,7 +40,7 @@ The Harborline Hotel, audit month June vs prior month May.
 - [x] Create Vultr inference client (stub; not yet wired into a live path)
 - [x] Add demo case endpoint
 - [x] Add CSV statement parser (`packages/agent` `statementParser.ts`: data/demo operating statement + misc breakout → `FinancialLineItem[]` + `ChargedFee[]`; tolerant headers/currency, category synonym map, unknown→OTHER+warning)
-- [ ] Add document chunker
+- [x] Add document parser + clause-aware chunker (`packages/agent` `documentParser.ts`: .md/.txt/digital-.pdf → `DocumentChunk[]` with citation labels like `HMA §4.2 — Incentive Management Fee`; PDF via injected extractor, scanned-PDF rejected clearly)
 - [x] Add retrieval tool (`packages/agent` `retriever.ts`: model-driven chunk selection via a VultronRetriever chat model — injected `RetrieverLlm` boundary; ranks by model score, drops hallucinated indices, tolerant JSON, topK/minScore)
 - [ ] Add fee rule extractor
 - [x] Add deterministic fee calculator
