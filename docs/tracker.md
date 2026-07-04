@@ -82,14 +82,18 @@
 
 Use this section once synthetic data is created.
 
-Numbers below are the **mock/target** authored in the backend demo (PR #4). Person C:
-build the synthetic `data/demo/` financials so the real calculator reproduces these.
+The deterministic calculator (`packages/agent`, PR #7) now **reproduces these numbers in
+unit tests** from a synthetic fixture (`packages/agent/src/fixtures/grandHarborCase.ts`) —
+that fixture is the source of truth for the exact inputs. **Person C:** build the
+`data/demo/` financials to match that fixture (Room+F&B+Banquet = $2,000,000; banquet
+cancellation $200,000; insurance proceeds $81,250; operating expense $1,350,000; corporate
+IT support $3,000) so the live path reproduces these without the mock.
 
 | Finding | Expected Impact | Evidence | Status |
 |---|---:|---|---|
-| Banquet cancellation revenue in base-fee base | $6,000 | HMA §4.1(b) + operating statement | Mock authored (needs data) |
-| Incentive fee on AGOP inflated by insurance proceeds | $9,750 | HMA §4.2 + operating statement | Mock authored (needs data) |
-| Corporate support passed through without approval | $3,000 | HMA §6.3 + support pack | Mock authored (needs data) |
+| Banquet cancellation revenue in base-fee base | $6,000 | HMA §4.1(b) + operating statement | Calc reproduces (unit-tested); needs `data/demo/` |
+| Incentive fee on AGOP inflated by insurance proceeds | $9,750 | HMA §4.2 + operating statement | Calc reproduces (unit-tested); needs `data/demo/` |
+| Corporate support passed through without approval | $3,000 | HMA §6.3 + support pack | Calc reproduces (unit-tested); needs `data/demo/` |
 | **Total suspected overcharge** | **$18,750** | — | Confidence 86% |
 
 ## 5. Merge Conflict Guardrails
