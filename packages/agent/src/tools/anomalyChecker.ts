@@ -72,6 +72,8 @@ const KEY_LABELS: Record<string, string> = {
   ROOM_REVENUE: "Rooms revenue",
   FNB_REVENUE: "Food & beverage revenue",
   BANQUET_REVENUE: "Banquet revenue",
+  OTHER_OPERATED_REVENUE: "Other operated departments revenue",
+  MISC_INCOME: "Miscellaneous income",
   CANCELLATION_REVENUE: "Cancellation revenue",
   INSURANCE_PROCEEDS: "Insurance proceeds",
   OPERATING_EXPENSE: "Operating expenses",

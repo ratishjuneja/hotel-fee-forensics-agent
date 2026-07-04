@@ -51,10 +51,14 @@ describe("checkAnomalies — Harborline June vs May (real data/demo CSVs)", () =
     priorChargedFees: may.chargedFees,
   });
 
-  it("flags the centralized-services jump as the only anomaly", () => {
+  it("flags the centralized-services jump as the leading anomaly", () => {
     // Centralized Services parses as a ChargedFee (PASS_THROUGH_EXPENSE), so the
-    // checker must compare charged fees, not just statement line items.
-    expect(anomalies).toHaveLength(1);
+    // checker must compare charged fees, not just statement line items. Against
+    // the unmerged statement the Misc Income roll-up ($72k → $140k, the stuffed
+    // excluded revenue) also flags — but only the expense-side jump leads and
+    // triggers review; the revenue swing is the fee calculator's job.
+    expect(anomalies.map((a) => a.key)).toEqual(["PASS_THROUGH_EXPENSE", "MISC_INCOME"]);
+    expect(anomalies[1]).toMatchObject({ kind: "line_item", triggersReview: false });
     expect(anomalies[0]).toMatchObject({
       key: "PASS_THROUGH_EXPENSE",
       kind: "charged_fee",

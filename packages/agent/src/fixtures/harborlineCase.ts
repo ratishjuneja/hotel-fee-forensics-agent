@@ -13,12 +13,11 @@
  *   - `data/demo/02b_misc_income_breakout_june.csv` (the excluded $66k)
  *   - `data/demo/04_support_invoice_pack.csv`    (invoice present, approval MISSING)
  *
- * MVP note: the calculator buckets operating revenue into three base categories
- * (ROOM/FNB/BANQUET). The USALI statement's "Other Operated Departments" and the
- * legitimately-included Miscellaneous Income (Space Rental + Commissions) are
- * aggregated into the third bucket here so the fee base foots to the
- * contractually-clean $3,474,000. The document parser + category synonym map
- * (PR-1) will carry the granular lines; this fixture is the calculator contract.
+ * The base-fee revenue categories mirror the statement parser's synonym map:
+ * the USALI statement's "Other Operated Departments" is OTHER_OPERATED_REVENUE
+ * and the legitimately-included Miscellaneous Income (Space Rental +
+ * Commissions) is MISC_INCOME, so the fee base foots to the contractually-clean
+ * $3,474,000 from the same categories an end-to-end parse produces.
  *
  * Keep these numbers in sync with `data/demo/05_expected_answer.md`.
  */
@@ -138,12 +137,15 @@ export const harborlineLineItems: FinancialLineItem[] = [
     opsCite("Operating Revenue — Rooms", "Rooms: $2,400,000.")),
   line("Food & beverage revenue", 820000, "FNB_REVENUE",
     opsCite("Operating Revenue — Food & Beverage", "Food & Beverage: $820,000.")),
-  // Aggregates Other Operated Departments ($180,000) + legitimately-included
-  // Miscellaneous Income: Space Rental ($40,000) + Commissions ($34,000) = $254,000.
-  line("Other operated departments & included misc income (space rental, commissions)",
-    254000, "BANQUET_REVENUE",
-    opsCite("Operating Revenue — Other Operated + Misc Income",
-      "Other Operated Departments $180,000 + Space Rental $40,000 + Commissions $34,000.")),
+  line("Other operated departments", 180000, "OTHER_OPERATED_REVENUE",
+    opsCite("Operating Revenue — Other Operated Departments",
+      "Other Operated Departments: $180,000.")),
+  // Legitimately-included Miscellaneous Income: Space Rental ($40,000) +
+  // Commissions ($34,000) = $74,000 (the excluded $66k is broken out below).
+  line("Misc income — space rental & commissions", 74000, "MISC_INCOME",
+    cite(MISC_DOC, "Misc Income Breakout — June",
+      "Misc Income — Space Rental / Commissions",
+      "Space Rental $40,000 + Commissions $34,000 (legitimately in fee base).")),
 
   // --- Revenue EXCLUDED from base + GOP by HMA §4.3 but left in by the operator.
   line("Banquet cancellation revenue", 41000, "CANCELLATION_REVENUE",

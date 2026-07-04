@@ -107,16 +107,24 @@ describe("parseOperatingStatement — June (real data/demo CSV)", () => {
     expect(result.chargedFees).toHaveLength(3);
   });
 
-  it("flags unrecognized revenue lines as OTHER instead of inventing a category", () => {
-    // "Other Operated Departments" and "Miscellaneous Income" have no dedicated category.
-    expect(byDescription("Other Operated Departments")?.normalizedCategory).toBe("OTHER");
-    expect(byDescription("Miscellaneous Income")?.normalizedCategory).toBe("OTHER");
-    expect(
-      result.warnings.some((w) => w.includes("Other Operated Departments")),
-    ).toBe(true);
-    expect(
-      result.warnings.some((w) => w.includes("Miscellaneous Income")),
-    ).toBe(true);
+  it("maps other-operated and misc income to their included-revenue categories", () => {
+    // Both belong in the base-fee revenue base (they are part of the $3,474,000
+    // clean base), so they must not fall into OTHER and get dropped from fees.
+    expect(byDescription("Other Operated Departments")?.normalizedCategory).toBe(
+      "OTHER_OPERATED_REVENUE",
+    );
+    expect(byDescription("Miscellaneous Income")?.normalizedCategory).toBe("MISC_INCOME");
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("flags an unrecognized revenue line as OTHER instead of inventing a category", () => {
+    const csv = [
+      "section,line_item,amount,usali_layer",
+      "OPERATING REVENUE,Gift Shop Royalties,12000,operating_revenue",
+    ].join("\n");
+    const parsed = parseOperatingStatement(csv, juneOpts);
+    expect(parsed.lineItems[0]?.normalizedCategory).toBe("OTHER");
+    expect(parsed.warnings.some((w) => w.includes("Gift Shop Royalties"))).toBe(true);
   });
 
   it("carries a citation back to the source document on every parsed row", () => {
@@ -153,9 +161,9 @@ describe("parseMiscIncomeBreakout — June (real data/demo CSV)", () => {
     });
   });
 
-  it("flags legitimately-included misc lines as OTHER (no dedicated category)", () => {
-    expect(byDescription("Space Rental")?.normalizedCategory).toBe("OTHER");
-    expect(byDescription("Commissions")?.normalizedCategory).toBe("OTHER");
+  it("keeps legitimately-included misc lines in the fee base as MISC_INCOME", () => {
+    expect(byDescription("Space Rental")?.normalizedCategory).toBe("MISC_INCOME");
+    expect(byDescription("Commissions")?.normalizedCategory).toBe("MISC_INCOME");
   });
 
   it("drops the roll-up total and keeps only the four detail rows", () => {
