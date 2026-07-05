@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import fastifyMultipart from "@fastify/multipart";
+import type { PdfExtractor } from "@feeforensics/agent";
 import type { FastifyInstance } from "fastify";
 
 import type { BlobStore } from "../data/blobStore.js";
@@ -16,6 +17,8 @@ import {
 export interface CasesRouteOptions {
   caseRepository: CaseRepository | null;
   blobStore: BlobStore | null;
+  /** Digital-PDF text extractor (pdfjs-dist). Omit to reject PDF uploads. */
+  pdfExtractor?: PdfExtractor;
 }
 
 /** Per-file cap for the upload route ONLY — the global JSON bodyLimit is untouched. */
@@ -64,7 +67,9 @@ export async function casesRoutes(
     upload: CaseUpload,
   ): Promise<void> => {
     try {
-      const { input, warnings } = assembleCase(base.id, upload);
+      const { input, warnings } = await assembleCase(base.id, upload, {
+        ...(options.pdfExtractor ? { pdfExtractor: options.pdfExtractor } : {}),
+      });
       await repo.saveCase({
         ...base,
         status: "ready",
