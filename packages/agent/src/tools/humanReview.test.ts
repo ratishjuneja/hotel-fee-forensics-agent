@@ -86,16 +86,46 @@ describe("planHumanReview", () => {
     expect(q.question).toContain("Centralized Services");
   });
 
-  it("offers dispute/accept for a NEEDS_REVIEW finding", () => {
+  it("offers dispute/accept for a CITED NEEDS_REVIEW finding (traces to a clause)", () => {
     const f = finding({
       issueType: "NEEDS_REVIEW",
       title: "Calculation input missing — human review required",
       suspectedImpact: 5000,
+      // Default citations carry a §-reference, so a dispute would be cited.
     });
     const plan = planHumanReview(CASE, [f]);
     const q = plan.questions[0]!;
     expect(q.id).toBe("case_x_q_needs_review");
     expect(q.options.map((o) => o.id)).toEqual(["dispute", "accept"]);
+  });
+
+  it("offers NO overcharge path for an UN-cited NEEDS_REVIEW finding", () => {
+    // The real unexplained-variance residual has an empty citation trail — it
+    // cannot be tied to a clause, so it must never be disputable as a cited
+    // overcharge. Only accept-as-correct or park-for-manual-review are offered.
+    const f = finding({
+      issueType: "NEEDS_REVIEW",
+      title: "Calculation input missing — human review required",
+      suspectedImpact: 149980,
+      citations: [],
+    });
+    const q = planHumanReview(CASE, [f]).questions[0]!;
+    expect(q.options.map((o) => o.id)).toEqual(["accept", "manual_review"]);
+    expect(q.options.map((o) => o.resultingAction)).toEqual(["approve", "human_review"]);
+    // Not one option turns this un-cited amount into a dispute.
+    expect(q.options.some((o) => o.resultingAction === "dispute")).toBe(false);
+  });
+
+  it("resolves an un-cited NEEDS_REVIEW to human_review (kept out of the dispute)", () => {
+    const f = finding({
+      issueType: "NEEDS_REVIEW",
+      title: "Calculation input missing — human review required",
+      suspectedImpact: 149980,
+      citations: [],
+    });
+    const plan = planHumanReview(CASE, [f], { case_x_q_needs_review: "manual_review" });
+    expect(plan.unanswered).toHaveLength(0);
+    expect(plan.resolvedFindings[0]!.recommendedAction).toBe("human_review");
   });
 
   it("passes non-human_review findings through untouched and raises no questions", () => {

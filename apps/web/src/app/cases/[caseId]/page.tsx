@@ -69,7 +69,9 @@ export default function CaseParsingPage() {
   const ready = status?.status === "ready";
   const failed = status?.status === "failed";
 
-  // Give the reader a beat to see "parsed", then move on to the run.
+  // Give the reader a beat to see "parsed", then move on to the plan screen.
+  // This only navigates to the run page — it does NOT start the audit; the run
+  // waits there for an explicit "Begin audit" click.
   useEffect(() => {
     if (!ready) return;
     const t = setTimeout(() => router.push(`/cases/${caseId}/run`), 1_400);
@@ -189,12 +191,12 @@ export default function CaseParsingPage() {
               {status.auditMonth ? ` · ${status.auditMonth}` : ""}
             </p>
             <p className="mt-0.5 text-sm text-muted">
-              Case parsed — starting the agent run…
+              Case parsed — opening the investigation plan…
             </p>
           </div>
           <Button asChild>
             <Link href={`/cases/${caseId}/run`}>
-              Run the audit
+              Review the plan
               <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>

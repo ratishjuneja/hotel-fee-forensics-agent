@@ -25,7 +25,7 @@ const CAPABILITIES = [
   },
   {
     icon: Calculator,
-    title: "Reruns the math",
+    title: "Re-runs the math",
     body: "A deterministic calculator recomputes every fee from your statements. The model never does the arithmetic.",
   },
   {
