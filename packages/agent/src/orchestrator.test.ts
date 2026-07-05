@@ -570,6 +570,9 @@ describe("runAudit — human-in-the-loop (unverifiable finding pauses the run)",
     expect(result.pendingQuestions).toHaveLength(1);
     const q = result.pendingQuestions![0]!;
     expect(q.issueType).toBe("IMPROPER_PASS_THROUGH");
+    // Names the real charge (from the line's provenance), not a generic category.
+    expect(q.subject).toBe("Centralized Services");
+    expect(q.question).toContain("Centralized Services");
     expect(q.citations.length).toBeGreaterThan(0); // never uncited
     expect(q.options).toHaveLength(2);
     expect(result.findings.some((f) => f.recommendedAction === "human_review")).toBe(true);
