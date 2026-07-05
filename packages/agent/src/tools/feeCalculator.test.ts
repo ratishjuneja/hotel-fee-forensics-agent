@@ -202,4 +202,68 @@ describe("calculateFees — edge cases", () => {
     // And the full variance still reconciles to the golden $36,580.
     expect(sumImpacts(result.lineItemImpacts)).toBeCloseTo(result.variance, 2);
   });
+
+  const passRules = (approvalThreshold: number): FeeRules["passThroughRules"] => ({
+    allowedCategories: ["OPERATING_EXPENSE"],
+    excludedCategories: ["CORPORATE_OVERHEAD"],
+    approvalThreshold,
+    citation: cite(),
+  });
+
+  it("clears a within-threshold §5.1 pass-through as a valid reimbursement (no residual)", () => {
+    // A centralized-services charge is a cost reimbursement, not a formula fee:
+    // at or under the §5.1 threshold it is valid and must reconcile as expected,
+    // never surface as unexplained variance (which would escalate to a human).
+    const result = calculateFees({
+      caseId: "c",
+      rules: {
+        baseManagementFee: baseRule,
+        incentiveFee: incentiveRule(500000),
+        passThroughRules: passRules(10000),
+      },
+      lineItems: [line(1000000, "ROOM_REVENUE"), line(200000, "OPERATING_EXPENSE")],
+      chargedFees: [
+        charged("BASE_MANAGEMENT_FEE", 30000), // 3% × 1,000,000
+        charged("INCENTIVE_MANAGEMENT_FEE", 36000), // 12% × (800,000 − 500,000)
+        charged("PASS_THROUGH_EXPENSE", 8800), // ≤ $10,000 → valid, nothing to recompute
+      ],
+    });
+
+    expect(result.expectedTotalFees).toBe(74800); // 30,000 + 36,000 + 8,800 reimbursement
+    expect(result.variance).toBe(0);
+    expect(result.lineItemImpacts).toHaveLength(0);
+    expect(
+      result.lineItemImpacts.some((i) => i.issueType === "NEEDS_REVIEW"),
+    ).toBe(false);
+  });
+
+  it("reads the §5.1 threshold per contract: $11,200 clears at $15k but not at $10k", () => {
+    const inputs = (approvalThreshold: number): FeeCalculatorInput => ({
+      caseId: "c",
+      rules: {
+        baseManagementFee: baseRule,
+        incentiveFee: incentiveRule(500000),
+        passThroughRules: passRules(approvalThreshold),
+      },
+      lineItems: [line(1000000, "ROOM_REVENUE"), line(200000, "OPERATING_EXPENSE")],
+      chargedFees: [
+        charged("BASE_MANAGEMENT_FEE", 30000),
+        charged("INCENTIVE_MANAGEMENT_FEE", 36000),
+        charged("PASS_THROUGH_EXPENSE", 11200),
+      ],
+    });
+
+    // Cedarcrest ($15k contract): $11,200 ≤ $15,000 → valid, reconciles, unflagged.
+    const cedarcrest = calculateFees(inputs(15000));
+    expect(cedarcrest.variance).toBe(0);
+    expect(cedarcrest.lineItemImpacts).toHaveLength(0);
+
+    // The identical charge under a $10,000 contract is NOT auto-cleared — the
+    // threshold value drives the outcome, so nothing is hard-coded.
+    const tighter = calculateFees(inputs(10000));
+    expect(tighter.variance).toBe(11200);
+    expect(
+      tighter.lineItemImpacts.some((i) => i.issueType === "NEEDS_REVIEW"),
+    ).toBe(true);
+  });
 });

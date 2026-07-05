@@ -612,3 +612,137 @@ describe("runAudit — human-in-the-loop (unverifiable finding pauses the run)",
     expect(result.report!.totalSuspectedOvercharge).toBe(1980 + 6600);
   });
 });
+
+// --- §5.1 threshold check: a within-threshold centralized charge auto-clears ------
+// The bug: a centralized-services charge has no recompute formula, so the agent
+// fell into "can't verify → ask the human" (a NEEDS_REVIEW residual) instead of
+// running the §5.1 threshold check. A charge at/under the contract's approval
+// threshold is a valid reimbursement and must clear silently — with the
+// threshold read from THAT case's HMA (§10k Harborline vs §15k Cedarcrest).
+
+// A clean month (fees charged correctly) with an added Centralized Services
+// charge. `centralized` sets the charge; drop `utilities` to withhold the line
+// that makes GOP non-derivable (the August escalation case).
+const cleanStatementCsv = (opts: {
+  centralized?: number;
+  utilities?: boolean;
+}): string => {
+  const utilities = opts.utilities ?? true;
+  const rows = [
+    STABLE_HEADER,
+    "OPERATING REVENUE,Rooms,1000000,operating_revenue,",
+    "OPERATING REVENUE,Food & Beverage,300000,operating_revenue,",
+    "OPERATING REVENUE,Other Operated Departments,50000,operating_revenue,",
+    "OPERATING REVENUE,Miscellaneous Income,50000,operating_revenue,",
+    "OPERATING REVENUE,Total Operating Revenue,1400000,operating_revenue_total,",
+    "DEPARTMENTAL EXPENSES,Rooms,250000,departmental_expense,",
+    "DEPARTMENTAL EXPENSES,Food & Beverage,200000,departmental_expense,",
+    "DEPARTMENTAL EXPENSES,Other Operated Departments,30000,departmental_expense,",
+    "UNDISTRIBUTED OPERATING EXPENSES,Administrative & General,100000,undistributed_expense,",
+    "UNDISTRIBUTED OPERATING EXPENSES,Sales & Marketing,80000,undistributed_expense,",
+    ...(utilities
+      ? ["UNDISTRIBUTED OPERATING EXPENSES,Utilities,40000,undistributed_expense,"]
+      : []),
+    "MANAGEMENT FEES,Base Management Fee,42000,fee_charged,3.0% of 1400000",
+    "MANAGEMENT FEES,Incentive Management Fee,70000,fee_charged,10% of GOP 700000",
+    ...(opts.centralized !== undefined
+      ? [`MANAGEMENT FEES,Centralized Services,${opts.centralized},fee_charged,§5.1 reimbursement`]
+      : []),
+  ];
+  return rows.join("\n");
+};
+
+const centralizedInput = (opts: {
+  caseId: string;
+  hma: string;
+  statementCsv: string;
+}): RunAuditInput => ({
+  caseId: opts.caseId,
+  hotelName: "The Cedarcrest Inn",
+  auditMonth: "September 2026",
+  period: "2026-09",
+  operatorName: "Meridian Hotel Management",
+  ownerName: "Cascadia Hotel Owner LP",
+  documents: {
+    hma: { docId: "doc_hma", name: "Hotel Management Agreement", text: opts.hma },
+    statement: {
+      docId: "doc_statement_sep",
+      name: "Monthly Operating Statement — September (USALI)",
+      csv: opts.statementCsv,
+    },
+  },
+});
+
+describe("runAudit — §5.1 within-threshold centralized charge auto-clears", () => {
+  const demoHma = demoFile("01_HMA_excerpt.txt"); // §5.1 threshold $10,000
+  // Same agreement with the §5.1 threshold raised to $15,000 (Cedarcrest). The
+  // deterministic extractor reads the dollar figure straight from the clause, so
+  // only this number changes — proving the threshold is per-contract, not fixed.
+  const cedarcrestHma = demoHma
+    .replace("Ten Thousand Dollars", "Fifteen Thousand Dollars")
+    .replace("($10,000)", "($15,000)");
+
+  it("July ($8,800 under a $10k contract): completes, zero findings, no prompt", async () => {
+    const { llm } = scriptedLlm();
+    const result = await runAudit(
+      centralizedInput({
+        caseId: "case_july_clean",
+        hma: demoHma,
+        statementCsv: cleanStatementCsv({ centralized: 8800 }),
+      }),
+      { llm, now },
+    );
+
+    expect(result.status).toBe("completed");
+    expect(result.findings).toEqual([]);
+    expect(result.pendingQuestions).toBeUndefined();
+    expect(result.report!.calculationResult.variance).toBe(0);
+    // Nothing was escalated: the §5.1 check cleared it, no NEEDS_REVIEW residual.
+    expect(result.trace.some((s) => s.kind === "HUMAN")).toBe(false);
+    expect(result.confidence).toBe(0.73); // ceiling for a single-statement upload
+    expect(result.memo.toLowerCase()).toContain("no fee issues");
+  });
+
+  it("Cedarcrest ($11,200 under a $15k contract): reads the threshold from the HMA", async () => {
+    const { llm } = scriptedLlm();
+    const result = await runAudit(
+      centralizedInput({
+        caseId: "case_cedarcrest_clean",
+        hma: cedarcrestHma,
+        statementCsv: cleanStatementCsv({ centralized: 11200 }),
+      }),
+      { llm, now },
+    );
+
+    expect(result.status).toBe("completed");
+    expect(result.findings).toEqual([]);
+    expect(result.pendingQuestions).toBeUndefined();
+    expect(result.report!.calculationResult.variance).toBe(0);
+    expect(result.confidence).toBe(0.73);
+  });
+
+  it("August (Utilities withheld): escalates ONLY on the incentive/GOP residual, not the centralized charge", async () => {
+    const { llm } = scriptedLlm();
+    const result = await runAudit(
+      centralizedInput({
+        caseId: "case_august_hitl",
+        hma: demoHma,
+        statementCsv: cleanStatementCsv({ centralized: 8800, utilities: false }),
+      }),
+      { llm, now },
+    );
+
+    // The genuine can't-assess escalation still fires — this is the good one.
+    expect(result.status).toBe("awaiting_input");
+    expect(result.report).toBeUndefined();
+    expect(result.pendingQuestions).toHaveLength(1);
+    // ...and it is the un-derivable incentive/GOP value, NOT the centralized charge.
+    expect(result.pendingQuestions![0]!.issueType).toBe("NEEDS_REVIEW");
+    expect(
+      result.findings.filter((f) => f.recommendedAction === "human_review"),
+    ).toHaveLength(1);
+    expect(
+      result.findings.some((f) => f.issueType === "IMPROPER_PASS_THROUGH"),
+    ).toBe(false);
+  });
+});
