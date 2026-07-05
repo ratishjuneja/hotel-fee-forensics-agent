@@ -98,16 +98,6 @@ const ACTION_LABEL: Record<RecommendedAction, string> = {
   approve: "No action",
 };
 
-/**
- * A finding belongs in a dispute only when it is a hard overcharge or an
- * unsupported charge. A finding the owner ACCEPTED as correct (`approve`) — or
- * one still parked for a human — is never disputed: it stays out of the dispute
- * total, the dispute email, and the "send a notice" recommendation. It still
- * shows in the findings table, marked valid / no action.
- */
-const isDisputable = (f: Finding): boolean =>
-  f.recommendedAction === "dispute" || f.recommendedAction === "request_explanation";
-
 /** "HMA §4.1/§4.3" from a finding's citations; "—" when none carry a §-ref. */
 function clauseRefs(finding: Finding): string {
   const refs = [
@@ -117,6 +107,22 @@ function clauseRefs(finding: Finding): string {
   ];
   return refs.length > 0 ? `HMA ${refs.join("/")}` : "—";
 }
+
+/** Every disputed dollar must trace to a clause — a finding with no §-citation can't. */
+const hasClauseCitation = (f: Finding): boolean => clauseRefs(f) !== "—";
+
+/**
+ * A finding belongs in a dispute only when it is a hard overcharge or an
+ * unsupported charge AND it traces to a clause. A finding the owner ACCEPTED as
+ * correct (`approve`) — or one still parked for a human — is never disputed. And
+ * an un-cited amount is never a cited overcharge, so even a "dispute"-marked
+ * finding with no clause citation stays out of the total, the email, and the
+ * "send a notice" recommendation (it shows in the table, routed to review).
+ */
+const isDisputable = (f: Finding): boolean =>
+  (f.recommendedAction === "dispute" ||
+    f.recommendedAction === "request_explanation") &&
+  hasClauseCitation(f);
 
 // --- Totals ---------------------------------------------------------------------
 
@@ -129,18 +135,28 @@ interface Totals {
 }
 
 function computeTotals(findings: Finding[]): Totals {
-  const sumWhere = (action: RecommendedAction) =>
-    findings
-      .filter((f) => f.recommendedAction === action)
-      .reduce((acc, f) => acc + Math.abs(f.suspectedImpact), 0);
-  const overcharge = sumWhere("dispute");
-  const unsupported = sumWhere("request_explanation");
-  return {
-    overcharge,
-    unsupported,
-    review: sumWhere("human_review"),
-    identified: overcharge + unsupported,
-  };
+  let overcharge = 0;
+  let unsupported = 0;
+  let review = 0;
+  for (const f of findings) {
+    const amount = Math.abs(f.suspectedImpact);
+    // Only a cited overcharge/unsupported charge sums into the dispute. An amount
+    // that could not be tied to a clause — even one marked "dispute" — is routed
+    // to the review bucket instead, so the total the owner sends is fully cited.
+    if (isDisputable(f)) {
+      if (f.recommendedAction === "dispute") overcharge += amount;
+      else unsupported += amount;
+    } else if (
+      f.recommendedAction === "human_review" ||
+      f.recommendedAction === "dispute" ||
+      f.recommendedAction === "request_explanation"
+    ) {
+      // human_review, or a dispute/unsupported finding with no clause citation.
+      review += amount;
+    }
+    // approve → accepted as correct; contributes nothing.
+  }
+  return { overcharge, unsupported, review, identified: overcharge + unsupported };
 }
 
 // --- Audit window ----------------------------------------------------------------

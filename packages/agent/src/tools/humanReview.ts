@@ -52,6 +52,19 @@ const isPassThrough = (t: IssueType): boolean =>
   t === "IMPROPER_PASS_THROUGH" || t === "APPROVAL_THRESHOLD_EXCEEDED";
 
 /**
+ * Does the finding trace to an HMA clause (a §-reference in any citation)?
+ *
+ * Our premise is that every disputed dollar traces to a clause. A finding the
+ * calculator could not tie to any clause (the NEEDS_REVIEW residual carries an
+ * empty citation trail) must therefore NEVER be offered a "treat as overcharge"
+ * path — an un-cited amount can't become a cited overcharge. Such a finding is
+ * only ever accepted or parked for manual review, never disputed.
+ */
+const CLAUSE_REF = /§\s?\d/;
+const hasClauseCitation = (finding: Finding): boolean =>
+  finding.citations.some((c) => CLAUSE_REF.test(c.sectionLabel ?? ""));
+
+/**
  * The charge in plain words, taken from the UPLOADED DOCUMENT itself — nothing
  * hardcoded, so it works for any case an owner uploads. Prefer the exact line
  * the charge sits on (the parsed CSV row's `lineLabel`, PR-15 provenance), so the
@@ -85,6 +98,18 @@ function questionFor(caseId: string, finding: Finding): PendingQuestion {
   const amount = formatMoney(finding.suspectedImpact);
   const citations: Citation[] = finding.citations;
 
+  const accept: PendingQuestionOption = {
+    id: "accept",
+    label: "Accept the charge as correct",
+    consequence: "Excluded from the dispute total.",
+    resultingAction: "approve",
+  };
+
+  // An unexplained amount only gets a "treat as overcharge" path when it actually
+  // traces to a clause. With no clause citation, disputing it would smuggle an
+  // un-cited six-figure line into the cited total — so it is parked for manual
+  // review instead, in a bucket that is explicitly NOT part of the dispute.
+  const cited = hasClauseCitation(finding);
   const options: PendingQuestionOption[] = isPassThrough(issueType)
     ? [
         {
@@ -101,26 +126,35 @@ function questionFor(caseId: string, finding: Finding): PendingQuestion {
           resultingAction: "request_explanation",
         },
       ]
-    : [
-        {
-          id: "dispute",
-          label: "Treat the unexplained amount as an overcharge",
-          consequence: "Added to the dispute total.",
-          resultingAction: "dispute",
-        },
-        {
-          id: "accept",
-          label: "Accept the charge as correct",
-          consequence: "Excluded from the dispute total.",
-          resultingAction: "approve",
-        },
-      ];
+    : cited
+      ? [
+          {
+            id: "dispute",
+            label: "Treat the unexplained amount as an overcharge",
+            consequence: "Added to the dispute total.",
+            resultingAction: "dispute",
+          },
+          accept,
+        ]
+      : [
+          accept,
+          {
+            id: "manual_review",
+            label: "Keep as unexplained — flag for manual review",
+            consequence:
+              "Held separately for manual follow-up; never added to the cited dispute total.",
+            resultingAction: "human_review",
+          },
+        ];
 
   const question = isPassThrough(issueType)
     ? `Did the owner authorize the ${subject} charge of ${amount}? ` +
       `The audit found no supporting approval on file, so it cannot decide this alone.`
-    : `The audit could not recompute ${subject} (${amount}). ` +
-      `How should this amount be treated?`;
+    : cited
+      ? `The audit could not recompute ${subject} (${amount}). ` +
+        `How should this amount be treated?`
+      : `The audit could not recompute ${subject} (${amount}) or tie it to a specific ` +
+        `clause, so it cannot be disputed as a cited overcharge. How should it be treated?`;
 
   return {
     id: questionId(caseId, issueType),

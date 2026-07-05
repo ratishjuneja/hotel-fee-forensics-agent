@@ -56,8 +56,20 @@ function cellText(s: string): string {
 
 export type DisputeKind = "overcharge" | "unsupported" | "review";
 
+/**
+ * Every disputed dollar must trace to a clause. A finding with no §-reference in
+ * any citation (e.g. an unexplained-variance residual) cannot be a cited
+ * overcharge, so it is never counted in the dispute total or the email.
+ */
+const CLAUSE_REF = /§\s?\d/;
+export function hasClauseCitation(f: Finding): boolean {
+  return f.citations.some((c) => CLAUSE_REF.test(c.sectionLabel ?? ""));
+}
+
 /** Hard overcharges are disputed; everything else is unsupported/pending. */
 export function disputeKind(f: Finding): DisputeKind {
+  // No clause citation → never a cited overcharge/unsupported, whatever the action.
+  if (!hasClauseCitation(f)) return "review";
   if (f.recommendedAction === "dispute") return "overcharge";
   if (f.recommendedAction === "request_explanation") return "unsupported";
   return "review";
@@ -65,14 +77,17 @@ export function disputeKind(f: Finding): DisputeKind {
 
 /**
  * A finding belongs in a dispute only when it is a hard overcharge or an
- * unsupported charge. A charge the owner ACCEPTED as correct (`approve`) — or one
- * still parked for a human — is never disputed: it stays out of the total, the
- * email, and the selectable list. This is the fix for "accept as correct still
- * shows up in the dispute": accepted charges are excluded here, at the source.
+ * unsupported charge AND it traces to a clause. A charge the owner ACCEPTED as
+ * correct (`approve`) — or one still parked for a human — is never disputed: it
+ * stays out of the total, the email, and the selectable list. Nor is an un-cited
+ * amount ever disputable: even a "dispute"-marked finding with no clause citation
+ * is excluded here, so no un-cited dollar can enter the cited dispute total.
  */
 export function isDisputable(f: Finding): boolean {
   return (
-    f.recommendedAction === "dispute" || f.recommendedAction === "request_explanation"
+    (f.recommendedAction === "dispute" ||
+      f.recommendedAction === "request_explanation") &&
+    hasClauseCitation(f)
   );
 }
 
@@ -105,9 +120,10 @@ export function summarize(selected: Finding[]): PacketSummary {
   let unsupported = 0;
   let count = 0;
   for (const f of selected) {
-    // Only overcharges and unsupported charges sum into a dispute. An accepted
-    // ("approve") or parked ("human_review") finding contributes nothing — it is
-    // neither counted nor added to the total.
+    // Only CITED overcharges and unsupported charges sum into a dispute. An
+    // accepted ("approve") or parked ("human_review") finding — or any amount
+    // that does not trace to a clause — contributes nothing to the total.
+    if (!isDisputable(f)) continue;
     if (f.recommendedAction === "dispute") {
       overcharge += f.suspectedImpact;
       count += 1;

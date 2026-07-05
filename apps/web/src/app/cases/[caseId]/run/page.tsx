@@ -6,9 +6,15 @@ import { useParams } from "next/navigation";
 import {
   AlertTriangle,
   ArrowRight,
+  Calculator,
   CheckCircle2,
+  Cpu,
   HelpCircle,
   Loader2,
+  Play,
+  ScrollText,
+  Search,
+  Sparkles,
 } from "lucide-react";
 import type { CaseStatusResponse, RunAuditResponse } from "@feeforensics/shared";
 import { ApiError, getCaseStatus, runAudit } from "@/lib/api";
@@ -19,18 +25,28 @@ import { Card } from "@/components/ui/Card";
 import { useAutoScroll } from "@/lib/useAutoScroll";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 
-const STEP_DELAY_MS = 750;
+// Deliberate per-step reveal pace. The computation is already done by the time
+// the trace renders — this only paces the *visible* reveal so a person (or a
+// demo-video viewer) can read each step's title and result before the next
+// appears. Subtle, for readability, not drama.
+const STEP_DELAY_MS = 900;
+const FIRST_STEP_MS = 450;
 
 /**
  * Agent run for an uploaded case. There is deliberately no bundled-replay
  * fallback: replaying canned output for someone else's documents would fake an
  * analysis. Every trace step, finding, and number comes from the live run;
- * failures surface honestly instead. As the trace reveals, the viewport keeps
- * re-centering on the working frontier.
+ * failures surface honestly instead.
+ *
+ * The run NEVER auto-starts: the page shows the investigation plan and waits for
+ * an explicit "Begin audit" click. Only that click kicks off `runAudit` — no run
+ * fires on page load or on navigation here. Once started, the trace reveals step
+ * by step and the viewport keeps re-centering on the working frontier.
  */
 export default function CaseRunPage() {
   const { caseId } = useParams<{ caseId: string }>();
   const [caseInfo, setCaseInfo] = useState<CaseStatusResponse | null>(null);
+  const [started, setStarted] = useState(false);
   const [result, setResult] = useState<RunAuditResponse | null>(null);
   const [error, setError] = useState<{ status: number; message: string } | null>(
     null,
@@ -43,7 +59,10 @@ export default function CaseRunPage() {
     getCaseStatus(caseId).then(setCaseInfo, () => {});
   }, [caseId]);
 
+  // The audit runs ONLY after the user clicks "Begin audit" (started === true).
+  // Nothing fires on mount, so landing on this page never triggers a run.
   useEffect(() => {
+    if (!started) return;
     let alive = true;
     setError(null);
     setResult(null);
@@ -61,7 +80,7 @@ export default function CaseRunPage() {
     return () => {
       alive = false;
     };
-  }, [caseId, attempt]);
+  }, [caseId, attempt, started]);
 
   // Reveal trace steps one at a time so the run reads as live.
   useEffect(() => {
@@ -71,7 +90,7 @@ export default function CaseRunPage() {
     result.trace.forEach((_, i) => {
       const t = setTimeout(
         () => setVisible((c) => Math.max(c, i + 1)),
-        400 + i * STEP_DELAY_MS,
+        FIRST_STEP_MS + i * STEP_DELAY_MS,
       );
       timers.current.push(t);
     });
@@ -103,10 +122,15 @@ export default function CaseRunPage() {
           <p className="mt-1 text-sm text-muted">
             {caseInfo?.auditMonth ? `${caseInfo.auditMonth} · ` : ""}
             The agent plans, retrieves, recomputes, and loops back on ambiguity —
-            every step below is real.
+            {started ? " every step below is real." : " review the plan, then begin."}
           </p>
         </div>
-        <RunStatus error={!!error} done={done} awaiting={!!awaiting} />
+        <RunStatus
+          started={started}
+          error={!!error}
+          done={done}
+          awaiting={!!awaiting}
+        />
       </header>
 
       {error && (
@@ -137,7 +161,9 @@ export default function CaseRunPage() {
         </Card>
       )}
 
-      {!error && (
+      {!error && !started && <PlanGate onBegin={() => setStarted(true)} />}
+
+      {!error && started && (
         <ol className="mt-8">
           {shown.map((step, i) => (
             <TraceRow
@@ -190,10 +216,12 @@ export default function CaseRunPage() {
 }
 
 function RunStatus({
+  started,
   error,
   done,
   awaiting,
 }: {
+  started: boolean;
   error: boolean;
   done: boolean;
   awaiting: boolean;
@@ -203,6 +231,14 @@ function RunStatus({
       <Pill className="bg-warning-soft text-warning-soft-foreground">
         <AlertTriangle className="h-4 w-4" />
         Failed
+      </Pill>
+    );
+  }
+  if (!started) {
+    return (
+      <Pill className="bg-surface-2 text-muted ring-1 ring-inset ring-border">
+        <Play className="h-4 w-4" />
+        Ready to run
       </Pill>
     );
   }
@@ -243,6 +279,83 @@ function Pill({
     >
       {children}
     </span>
+  );
+}
+
+/** The five-step investigation plan the agent will follow, once told to. */
+const PLAN = [
+  { kind: "LLM", icon: Sparkles, label: "Plan the investigation" },
+  { kind: "TOOL", icon: Search, label: "Retrieve the fee clauses & the month's statements" },
+  { kind: "TOOL", icon: Calculator, label: "Recompute every fee, deterministically" },
+  { kind: "TOOL", icon: Search, label: "Check for excluded revenue & anomalies" },
+  { kind: "LLM", icon: ScrollText, label: "Write the cited memo & dispute email" },
+] as const;
+
+/**
+ * Pre-run gate: shows the plan the agent will follow and holds until the owner
+ * clicks "Begin audit". Nothing runs before that click — the plan is a schematic
+ * of the work, not a run in progress.
+ */
+function PlanGate({ onBegin }: { onBegin: () => void }) {
+  return (
+    <Card className="mt-8 animate-fade-in p-5 sm:p-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="flex h-2 w-2 rounded-full bg-primary" aria-hidden />
+          <span className="text-sm font-semibold text-foreground">
+            Investigation plan
+          </span>
+        </div>
+        <span className="text-xs text-subtle">waiting to start</span>
+      </div>
+
+      <ol className="relative mt-5">
+        <span
+          className="absolute bottom-3 left-[1.05rem] top-3 w-px bg-border"
+          aria-hidden
+        />
+        {PLAN.map((step, i) => {
+          const isLlm = step.kind === "LLM";
+          const Icon = step.icon;
+          return (
+            <li key={i} className="relative flex items-center gap-3 py-2.5">
+              <span
+                className={
+                  "relative z-10 flex h-[2.1rem] w-[2.1rem] shrink-0 items-center justify-center rounded-full border bg-surface " +
+                  (isLlm
+                    ? "border-primary/30 text-primary"
+                    : "border-success/30 text-success")
+                }
+              >
+                <Icon className="h-4 w-4" />
+              </span>
+              <span className="flex-1 text-sm text-foreground">{step.label}</span>
+              <span
+                className={
+                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.65rem] font-semibold " +
+                  (isLlm
+                    ? "bg-primary-soft text-primary-soft-foreground"
+                    : "bg-success-soft text-success-soft-foreground")
+                }
+              >
+                {isLlm ? <Sparkles className="h-3 w-3" /> : <Cpu className="h-3 w-3" />}
+                {step.kind}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-5">
+        <p className="text-sm text-muted">
+          Nothing runs until you start it. Review the plan, then begin.
+        </p>
+        <Button size="lg" onClick={onBegin}>
+          <Play className="h-4 w-4" />
+          Begin audit
+        </Button>
+      </div>
+    </Card>
   );
 }
 
