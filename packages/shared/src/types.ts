@@ -310,6 +310,43 @@ export interface DemoCaseResponse {
   expectedOutputs: string[];
 }
 
+/** Async parse lifecycle of an uploaded (BYO) case. */
+export type CaseParseStatus = "parsing" | "ready" | "failed";
+
+/** Per-document parse feedback surfaced while the frontend polls. */
+export interface CaseParseWarning {
+  /** Upload role, e.g. "hma" | "statement" | "support_pack". */
+  role: string;
+  documentName: string;
+  warnings: string[];
+}
+
+/** Response body for GET /api/cases/:caseId (upload parse-status polling). */
+export interface CaseStatusResponse {
+  caseId: string;
+  status: CaseParseStatus;
+  hotelName: string;
+  auditMonth: string;
+  parseWarnings: CaseParseWarning[];
+}
+
+/**
+ * One parsed source document of an uploaded case, served verbatim so the
+ * evidence viewer renders what the agent actually read — never a stand-in.
+ */
+export interface CaseSourceDocument {
+  docId: string;
+  name: string;
+  format: "text" | "csv";
+  content: string;
+}
+
+/** Response body for GET /api/cases/:caseId/documents. */
+export interface CaseDocumentsResponse {
+  caseId: string;
+  documents: CaseSourceDocument[];
+}
+
 /** Response body for POST /api/cases/:caseId/run-audit. */
 export interface RunAuditResponse {
   caseId: string;

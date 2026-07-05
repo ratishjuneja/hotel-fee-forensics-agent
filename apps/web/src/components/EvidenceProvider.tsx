@@ -15,6 +15,7 @@ import {
   resolveCitation,
   type DocKind,
   type EvidenceTarget,
+  type SourceDocument,
 } from "@/lib/documents";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -51,17 +52,31 @@ const KIND_LABEL: Record<DocKind, string> = {
   invoice: "Invoice / support",
 };
 
-export function EvidenceProvider({ children }: { children: React.ReactNode }) {
+export function EvidenceProvider({
+  children,
+  documents,
+}: {
+  children: React.ReactNode;
+  /**
+   * Source-document registry citations resolve against. Omit for the bundled
+   * demo documents; the uploaded-case report passes a registry built from the
+   * parsed uploaded documents so citations open what the agent actually read.
+   */
+  documents?: Record<string, SourceDocument>;
+}) {
   const [target, setTarget] = useState<Target | null>(null);
 
-  const open = useCallback((citation: Citation) => {
-    const resolved = resolveCitation(citation);
-    if (resolved) setTarget({ ...resolved, citation });
-  }, []);
+  const open = useCallback(
+    (citation: Citation) => {
+      const resolved = resolveCitation(citation, documents);
+      if (resolved) setTarget({ ...resolved, citation });
+    },
+    [documents],
+  );
 
   const canOpen = useCallback(
-    (citation: Citation) => resolveCitation(citation) !== null,
-    [],
+    (citation: Citation) => resolveCitation(citation, documents) !== null,
+    [documents],
   );
 
   const value = useMemo(() => ({ open, canOpen }), [open, canOpen]);

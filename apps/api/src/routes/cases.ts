@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 
 import fastifyMultipart from "@fastify/multipart";
-import type { PdfExtractor } from "@feeforensics/agent";
+import type { PdfExtractor, RunAuditInput } from "@feeforensics/agent";
+import type { CaseSourceDocument } from "@feeforensics/shared";
 import type { FastifyInstance } from "fastify";
 
 import type { BlobStore } from "../data/blobStore.js";
@@ -39,6 +40,9 @@ const UPLOAD_ROLES: readonly UploadRole[] = [
  *                            creates a case (status "parsing"), kicks an async
  *                            parse job, returns { caseId, status } (202).
  *   GET  /api/cases/:id    — parse status + per-document warnings (frontend polls).
+ *   GET  /api/cases/:id/documents — the parsed source documents of a ready case,
+ *                            verbatim, so the evidence viewer shows what the
+ *                            agent actually read (never the demo stand-ins).
  *
  * Persistence is required: with no case repository or blob store configured the
  * upload route 503s rather than dropping files or using an in-memory store.
@@ -198,6 +202,50 @@ export async function casesRoutes(
         auditMonth: record.auditMonth,
         parseWarnings: record.parseWarnings,
       };
+    },
+  );
+
+  // GET /api/cases/:id/documents — the parsed source documents, verbatim
+  app.get<{ Params: { caseId: string } }>(
+    "/api/cases/:caseId/documents",
+    async (request, reply) => {
+      if (options.caseRepository === null) {
+        return reply.code(503).send(persistenceUnconfigured);
+      }
+      const record = await options.caseRepository.getCase(request.params.caseId);
+      if (!record) {
+        return reply.code(404).send({
+          error: "case_not_found",
+          message: "No such case.",
+        });
+      }
+      if (record.status === "parsing") {
+        return reply.code(409).send({
+          error: "case_not_ready",
+          message: "This case is still parsing — poll GET /api/cases/:id until status is ready.",
+        });
+      }
+      if (record.status === "failed" || !record.assembledInput) {
+        return reply.code(422).send({
+          error: "case_parse_failed",
+          message: "This case's documents could not be parsed.",
+          parseWarnings: record.parseWarnings,
+        });
+      }
+      const docs = record.assembledInput.documents;
+      const documents: CaseSourceDocument[] = [
+        { docId: docs.hma.docId, name: docs.hma.name, format: "text", content: docs.hma.text },
+        ...(["statement", "miscBreakout", "priorStatement", "supportPack"] as const)
+          .map((key): RunAuditInput["documents"]["statement"] | undefined => docs[key])
+          .filter((doc) => doc !== undefined)
+          .map((doc): CaseSourceDocument => ({
+            docId: doc.docId,
+            name: doc.name,
+            format: "csv",
+            content: doc.csv,
+          })),
+      ];
+      return { caseId: record.id, documents };
     },
   );
 }
