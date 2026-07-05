@@ -10,75 +10,65 @@ import {
 } from "react";
 
 /**
- * Lightweight theme system (no next-themes dependency). Persists the user's
- * choice — "light" | "dark" | "system" — and reflects it as a `.dark` class on
+ * Lightweight two-mode theme system (no next-themes dependency). Persists the
+ * user's choice — "light" | "dark" — and reflects it as a `.dark` class on
  * <html>. The first paint is handled by {@link themeScript} injected in <head>,
  * so there is no flash before hydration.
+ *
+ * Light is the default: a first-time visitor always starts in light mode,
+ * regardless of their OS setting, until they flip the toggle.
  */
-export type Theme = "light" | "dark" | "system";
+export type Theme = "light" | "dark";
 
-const STORAGE_KEY = "ff-theme";
+const STORAGE_KEY = "bb-theme";
 
 interface ThemeContextValue {
   theme: Theme;
-  /** The theme actually applied right now ("system" resolved via matchMedia). */
-  resolved: "light" | "dark";
   setTheme: (theme: Theme) => void;
+  /** Flip between light and dark. */
+  toggle: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 /**
  * Inline, render-blocking script that applies the stored theme before the first
- * paint. Mirrors the resolve logic below — keep them in sync. Injected once in
- * the document <head>.
+ * paint. Only a stored "dark" yields dark; anything else (no value, legacy
+ * values, "light") resolves to light. Mirror any change here in {@link apply}.
+ * Injected once in the document <head>.
  */
-export const themeScript = `(function(){try{var t=localStorage.getItem('${STORAGE_KEY}')||'system';var d=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);document.documentElement.style.colorScheme=d?'dark':'light';}catch(e){}})();`;
+export const themeScript = `(function(){try{var d=localStorage.getItem('${STORAGE_KEY}')==='dark';document.documentElement.classList.toggle('dark',d);document.documentElement.style.colorScheme=d?'dark':'light';}catch(e){}})();`;
 
-function systemPrefersDark(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    window.matchMedia("(prefers-color-scheme: dark)").matches
-  );
-}
-
-function apply(theme: Theme): "light" | "dark" {
-  const dark = theme === "dark" || (theme === "system" && systemPrefersDark());
+function apply(theme: Theme): void {
   const root = document.documentElement;
-  root.classList.toggle("dark", dark);
-  root.style.colorScheme = dark ? "dark" : "light";
-  return dark ? "dark" : "light";
+  root.classList.toggle("dark", theme === "dark");
+  root.style.colorScheme = theme;
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("system");
-  const [resolved, setResolved] = useState<"light" | "dark">("light");
+  const [theme, setThemeState] = useState<Theme>("light");
 
   // Hydrate from storage on mount and keep <html> in sync.
   useEffect(() => {
-    const stored = (localStorage.getItem(STORAGE_KEY) as Theme | null) ?? "system";
-    setThemeState(stored);
-    setResolved(apply(stored));
+    const next: Theme =
+      localStorage.getItem(STORAGE_KEY) === "dark" ? "dark" : "light";
+    setThemeState(next);
+    apply(next);
   }, []);
-
-  // Follow the OS when the user has chosen "system".
-  useEffect(() => {
-    if (theme !== "system") return;
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => setResolved(apply("system"));
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, [theme]);
 
   const setTheme = useCallback((next: Theme) => {
     localStorage.setItem(STORAGE_KEY, next);
     setThemeState(next);
-    setResolved(apply(next));
+    apply(next);
   }, []);
 
+  const toggle = useCallback(() => {
+    setTheme(theme === "dark" ? "light" : "dark");
+  }, [theme, setTheme]);
+
   const value = useMemo(
-    () => ({ theme, resolved, setTheme }),
-    [theme, resolved, setTheme],
+    () => ({ theme, setTheme, toggle }),
+    [theme, setTheme, toggle],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

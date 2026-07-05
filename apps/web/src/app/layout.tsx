@@ -1,8 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
-import { ShieldCheck } from "lucide-react";
+import { BellBoyMark } from "@/components/brand/BellBoyLogo";
 import { ThemeProvider, themeScript } from "@/components/theme/ThemeProvider";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { Toaster } from "@/components/ui/Toaster";
@@ -10,11 +10,19 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "BellBoy: Hotel operator fee audit agent",
+    default: "BellBoy: Audit Agent",
     template: "%s · BellBoy",
   },
   description:
     "Upload your hotel management agreement and monthly operating statements. BellBoy reruns every fee with a deterministic calculator, finds the leakage, and writes a cited, dispute-ready memo, with a visible agent trace.",
+};
+
+export const viewport: Viewport = {
+  // Mobile browser chrome tint — matches the header background in each theme.
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#F8FAFC" },
+    { media: "(prefers-color-scheme: dark)", color: "#0D1424" },
+  ],
 };
 
 export default function RootLayout({
@@ -53,9 +61,7 @@ function SiteHeader() {
           className="group flex items-center gap-2.5 rounded-md"
           aria-label="BellBoy home"
         >
-          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-sm">
-            <ShieldCheck className="h-4 w-4" />
-          </span>
+          <BellBoyMark className="h-7 w-7 shrink-0 rounded-[0.4rem] shadow-sm ring-1 ring-black/5" />
           <span className="flex items-baseline gap-1.5">
             <span className="text-[0.95rem] font-semibold tracking-tight text-foreground">
               BellBoy
