@@ -402,9 +402,16 @@ export interface EvidenceTarget {
  * highlight. Matches sections by the longest section ref present in the
  * citation label (so "§4.1(b)" would win over "§4.1"), and statement/invoice
  * lines by keyword overlap with the citation label or quote.
+ *
+ * `registry` defaults to the bundled demo documents; the uploaded-case report
+ * passes a registry built from the parsed uploaded documents so a citation
+ * opens what the agent actually read (see lib/caseDocuments.ts).
  */
-export function resolveCitation(citation: Citation): EvidenceTarget | null {
-  const doc = DOCUMENTS[citation.documentId];
+export function resolveCitation(
+  citation: Citation,
+  registry: Record<string, SourceDocument> = DOCUMENTS,
+): EvidenceTarget | null {
+  const doc = registry[citation.documentId];
   if (!doc) return null;
 
   const label = citation.sectionLabel ?? "";

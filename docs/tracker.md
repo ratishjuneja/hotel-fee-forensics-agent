@@ -205,9 +205,13 @@ remark-gfm · `@tailwindcss/typography`. Types imported from `@feeforensics/shar
 | Route | Screen | Data source | Status |
 |---|---|---|---|
 | `/` | Landing | static | ✅ |
+| `/cases/new` | BYO upload (labeled role slots + notes + email opt-out) | `POST /api/cases` (client) | ✅ |
 | `/cases/demo` | Case Overview | `GET /api/demo-case` (server) | ✅ |
 | `/cases/demo/run` | Agent Trace | `POST …/run-audit` (client) + staged reveal | 🟡 |
 | `/cases/demo/report` | Findings + Calc + Memo + Email | `GET …/report` (server) | 🟡 |
+| `/cases/[caseId]` | Upload parse status (polls, per-doc warnings) | `GET /api/cases/:id` (client) | ✅ |
+| `/cases/[caseId]/run` | Agent Trace (uploaded case — no bundled replay) | `POST …/run-audit` (client) | ✅ |
+| `/cases/[caseId]/report` | Findings + Calc + Memo (uploaded docs in evidence viewer) | `GET …/report` + `…/documents` (server) | ✅ |
 
 ### 8.4 Component inventory
 
@@ -252,8 +256,16 @@ remark-gfm · `@tailwindcss/typography`. Types imported from `@feeforensics/shar
       assemble from the selection (`DisputeBuilder`, `lib/disputePacket.ts`)
 - [x] **PDF export** — print-styled `/cases/demo/report/print` route + auto-print,
       linked from the report as "Export PDF" (browser Save-as-PDF, zero deps)
-- [x] **Upload flow** — `/cases/new` accepts documents, attempts `POST /api/cases`,
-      falls back honestly to the demo case when the MVP backend has no endpoint
+- [x] **Upload flow (real, PR-18)** — `/cases/new` posts labeled role slots (HMA,
+      Operating Statement, Past Operating Statement, Collated Invoices + optional
+      supplementary) + Additional-info notes + "Draft dispute email" (default on) to
+      `POST /api/cases`; a parsing screen (`/cases/[caseId]`) polls `GET /api/cases/:id`
+      with per-document warnings, then hands off to dynamic `/cases/[caseId]/{run,report}`.
+      The uploaded run does **not** replay the bundled Harborline output (that would fake
+      an analysis) — failures surface honestly. The evidence viewer renders the *uploaded*
+      documents via the new `GET /api/cases/:id/documents` (`lib/caseDocuments.ts` →
+      `resolveCitation` registry). Fallback copy fixed to "files were not stored or
+      analyzed." Report body shared via `components/ReportView.tsx` (demo + uploaded).
 - [ ] Findings: expandable confidence backed by real data once contract adds it (§8.6)
 - [ ] "Cannot assess — evidence missing" state for checks with no evidence
 - [ ] `error.tsx` + `not-found.tsx` boundaries; loading skeletons

@@ -9,6 +9,7 @@ import {
   buildPacket,
   disputeKind,
   summarize,
+  type DisputeContext,
 } from "@/lib/disputePacket";
 import { CopyButton } from "./CopyButton";
 import { DownloadButton } from "./DownloadButton";
@@ -25,7 +26,16 @@ const KIND_STYLE: Record<string, string> = {
  * dispute email + downloadable packet. Totals and text recompute instantly from
  * the selection — the numbers are the calculator's, only summed here.
  */
-export function DisputeBuilder({ findings }: { findings: Finding[] }) {
+export function DisputeBuilder({
+  findings,
+  context,
+  packetFilename = "harborline-dispute-packet.md",
+}: {
+  findings: Finding[];
+  /** Party/period the packet is addressed with. Omit for the demo case. */
+  context?: DisputeContext;
+  packetFilename?: string;
+}) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     () => new Set(findings.map((f) => f.id)),
   );
@@ -35,8 +45,8 @@ export function DisputeBuilder({ findings }: { findings: Finding[] }) {
     [findings, selectedIds],
   );
   const summary = useMemo(() => summarize(chosen), [chosen]);
-  const email = useMemo(() => buildEmail(chosen), [chosen]);
-  const packet = useMemo(() => buildPacket(chosen), [chosen]);
+  const email = useMemo(() => buildEmail(chosen, context), [chosen, context]);
+  const packet = useMemo(() => buildPacket(chosen, context), [chosen, context]);
 
   const toggle = (id: string) =>
     setSelectedIds((prev) => {
@@ -124,7 +134,7 @@ export function DisputeBuilder({ findings }: { findings: Finding[] }) {
           />
           <DownloadButton
             content={packet}
-            filename="harborline-dispute-packet.md"
+            filename={packetFilename}
             label="Download packet"
           />
         </div>

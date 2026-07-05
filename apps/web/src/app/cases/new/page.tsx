@@ -33,8 +33,9 @@ export default function NewCasePage() {
       </div>
 
       <p className="mt-8 rounded-lg bg-slate-50 p-3 text-xs text-slate-500">
-        Demo note: all sample documents are <strong>synthetic</strong>. The
-        hosted MVP analyzes a preloaded synthetic case — see the preloaded{" "}
+        Uploads are stored in Vultr Object Storage and parsed into a new case.
+        Demo note: all sample documents are <strong>synthetic</strong> — or skip
+        the upload and explore the preloaded{" "}
         <Link href="/cases/demo" className="text-brand-600 hover:underline">
           Harborline demo case
         </Link>

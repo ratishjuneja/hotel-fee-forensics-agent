@@ -212,6 +212,42 @@ describe("POST /api/cases — BYO upload → parse → run", () => {
     expect(res.json().error).toBe("case_not_found");
   });
 
+  it("serves the parsed source documents for a ready case", async () => {
+    app = await newServer();
+    const { body, contentType } = buildMultipart(demoUploadParts());
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/cases",
+      headers: { "content-type": contentType },
+      payload: body,
+    });
+    const { caseId } = created.json();
+    expect(await waitUntilReady(app, caseId)).toBe("ready");
+
+    const res = await app.inject({ method: "GET", url: `/api/cases/${caseId}/documents` });
+    expect(res.statusCode).toBe(200);
+    const { documents } = res.json();
+    expect(documents).toHaveLength(5);
+
+    const hma = documents.find((d: { docId: string }) => d.docId === "doc_hma");
+    expect(hma.format).toBe("text");
+    expect(hma.name).toBe("Hotel Management Agreement");
+    expect(hma.content).toContain("Base Management Fee");
+
+    const statement = documents.find(
+      (d: { docId: string }) => d.docId === "doc_operating_statement",
+    );
+    expect(statement.format).toBe("csv");
+    expect(statement.content).toContain("Rooms");
+  });
+
+  it("404s the documents of an unknown case", async () => {
+    app = await newServer();
+    const res = await app.inject({ method: "GET", url: "/api/cases/case_nope/documents" });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error).toBe("case_not_found");
+  });
+
   it("503s the upload when object storage is not configured", async () => {
     app = await buildServer({
       ranker: scriptedRanker,

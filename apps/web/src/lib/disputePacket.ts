@@ -11,10 +11,30 @@ import { formatCurrency } from "./utils";
  * lifted from each finding's citations, so the packet stays cited.
  */
 
-const HOTEL = "The Harborline Hotel";
-const PERIOD = "June 2026";
-const OPERATOR = "Meridian Hotel Management";
-const OWNER = "Cascadia Hotel Owner LP";
+/** Party/period labels the packet is addressed with. Defaults to the demo case. */
+export interface DisputeContext {
+  hotel: string;
+  period: string;
+  operator?: string;
+  owner?: string;
+}
+
+const DEMO_CONTEXT: Required<DisputeContext> = {
+  hotel: "The Harborline Hotel",
+  period: "June 2026",
+  operator: "Meridian Hotel Management",
+  owner: "Cascadia Hotel Owner LP",
+};
+
+const withDefaults = (ctx?: DisputeContext): Required<DisputeContext> => {
+  if (!ctx) return DEMO_CONTEXT;
+  return {
+    hotel: ctx.hotel,
+    period: ctx.period,
+    operator: ctx.operator ?? "the Operator",
+    owner: ctx.owner ?? "the Owner",
+  };
+};
 
 /**
  * Finding titles/explanations are LLM-influenced (derived from documents an
@@ -87,10 +107,11 @@ export function summarize(selected: Finding[]): PacketSummary {
 }
 
 /** Markdown dispute memo for the selected findings. */
-export function buildMemo(selected: Finding[]): string {
+export function buildMemo(selected: Finding[], context?: DisputeContext): string {
   if (selected.length === 0) {
     return "_No findings selected — choose at least one item to build a dispute packet._";
   }
+  const { hotel, period } = withDefaults(context);
   const s = summarize(selected);
   const rows = selected
     .map(
@@ -102,7 +123,7 @@ export function buildMemo(selected: Finding[]): string {
     .map((f, i) => `${i + 1}. **${plain(f.title)}** — ${plain(f.explanation)}`)
     .join("\n");
 
-  return `## Dispute Packet — ${HOTEL} (${PERIOD})
+  return `## Dispute Packet — ${hotel} (${period})
 
 **Pursuing ${s.count} finding${s.count === 1 ? "" : "s"} · ${formatCurrency(s.total)} total (${formatCurrency(s.overcharge)} overcharge + ${formatCurrency(s.unsupported)} unsupported)**
 
@@ -127,7 +148,8 @@ export interface DisputeEmail {
 }
 
 /** Draft dispute email for the selected findings. */
-export function buildEmail(selected: Finding[]): DisputeEmail {
+export function buildEmail(selected: Finding[], context?: DisputeContext): DisputeEmail {
+  const { hotel, period, operator, owner } = withDefaults(context);
   const s = summarize(selected);
   const items = selected
     .map(
@@ -137,24 +159,24 @@ export function buildEmail(selected: Finding[]): DisputeEmail {
     .join("\n");
 
   return {
-    subject: `${HOTEL} — ${PERIOD} operator fee dispute (${formatCurrency(s.total)})`,
-    body: `Hi [Operator — ${OPERATOR}],
+    subject: `${hotel} — ${period} operator fee dispute (${formatCurrency(s.total)})`,
+    body: `Hi [Operator — ${operator}],
 
-Following our review of the ${PERIOD} operating package, we are raising ${s.count} item${s.count === 1 ? "" : "s"} totaling ${formatCurrency(s.total)} (${formatCurrency(s.overcharge)} overcharge + ${formatCurrency(s.unsupported)} unsupported):
+Following our review of the ${period} operating package, we are raising ${s.count} item${s.count === 1 ? "" : "s"} totaling ${formatCurrency(s.total)} (${formatCurrency(s.overcharge)} overcharge + ${formatCurrency(s.unsupported)} unsupported):
 
 ${items}
 
 We request a corrected fee calculation (true-up) on the overcharge items and either the written approval or a reversal of any unsupported items. Per the audit-rights clause (HMA §9.2) we'd like to resolve this within the true-up window.
 
 Thank you,
-[Owner — ${OWNER}]`,
+[Owner — ${owner}]`,
   };
 }
 
 /** Combined downloadable packet (memo + email) as markdown. */
-export function buildPacket(selected: Finding[]): string {
-  const email = buildEmail(selected);
-  return `${buildMemo(selected)}
+export function buildPacket(selected: Finding[], context?: DisputeContext): string {
+  const email = buildEmail(selected, context);
+  return `${buildMemo(selected, context)}
 
 ---
 
