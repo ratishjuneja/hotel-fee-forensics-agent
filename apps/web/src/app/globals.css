@@ -10,6 +10,8 @@
  * paired *-soft-foreground text in both themes.
  */
 @layer base {
+  /* Light theme = the source of truth for print. Keep this list in sync with
+     the `:root, .dark` overrides in the `@media print` block below. */
   :root {
     --background: 210 40% 98.5%;
     --surface: 0 0% 100%;
@@ -122,17 +124,6 @@
   }
 }
 
-@layer components {
-  /**
-   * Compatibility shim for screens not yet migrated to the <Card> component.
-   * Themed via tokens so it works in dark mode too; being removed screen by
-   * screen as the redesign lands.
-   */
-  .card {
-    @apply rounded-xl border border-border bg-surface shadow-sm;
-  }
-}
-
 @layer utilities {
   /* Skeleton shimmer sweep; disabled under reduced-motion below. */
   .shimmer {
@@ -169,12 +160,50 @@
   }
 }
 
-/* Print / Save-as-PDF: force the light surface, clean margins, unbroken rows. */
+/* Print / Save-as-PDF: force the light surface, clean margins, unbroken rows.
+   A dark-mode user's Save-as-PDF is the dispute deliverable, so we override the
+   COMPLETE token set for BOTH scopes here — otherwise the ~27 tokens the print
+   block used to leave alone keep their `.dark` values (near-black badge fills,
+   light-gray text on white). This is un-layered on purpose so it beats `.dark`.
+   Every value below mirrors the light `:root` block above — keep the two in
+   sync: any token added to `:root`/`.dark` must be duplicated here too. */
 @media print {
-  :root {
+  :root,
+  .dark {
+    color-scheme: light;
     --background: 0 0% 100%;
     --surface: 0 0% 100%;
+    --surface-2: 214 32% 97%;
+    --surface-3: 214 28% 94%;
     --foreground: 222 38% 12%;
+    --muted: 216 15% 40%;
+    --subtle: 216 14% 55%;
+    --border: 214 26% 89%;
+    --border-strong: 214 20% 80%;
+    --ring: 221 76% 55%;
+
+    --primary: 221 66% 45%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 221 68% 39%;
+    --primary-soft: 221 92% 96%;
+    --primary-soft-foreground: 221 64% 38%;
+
+    --success: 152 52% 33%;
+    --success-foreground: 0 0% 100%;
+    --success-soft: 150 58% 95%;
+    --success-soft-foreground: 154 58% 26%;
+
+    --warning: 30 90% 40%;
+    --warning-foreground: 0 0% 100%;
+    --warning-soft: 40 92% 93%;
+    --warning-soft-foreground: 26 82% 33%;
+
+    --danger: 349 68% 45%;
+    --danger-foreground: 0 0% 100%;
+    --danger-soft: 350 92% 96%;
+    --danger-soft-foreground: 349 66% 40%;
+
+    --shadow: 222 45% 20%;
   }
   body {
     background: #fff;

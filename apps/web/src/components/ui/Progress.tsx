@@ -38,8 +38,7 @@ export function Progress({
     >
       {clamped === undefined ? (
         <div
-          className={cn("h-full w-1/3 rounded-full", bar)}
-          style={{ animation: "slide-in-right 1.2s ease-in-out infinite alternate" }}
+          className={cn("h-full w-1/3 rounded-full animate-progress-sweep", bar)}
         />
       ) : (
         <div
