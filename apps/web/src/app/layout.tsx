@@ -10,11 +10,11 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "FeeForensics — Hotel operator fee audit agent",
-    template: "%s · FeeForensics",
+    default: "BellBoy — Hotel operator fee audit agent",
+    template: "%s · BellBoy",
   },
   description:
-    "Upload your hotel management agreement and monthly operating statements. FeeForensics reruns every fee with a deterministic calculator, finds the leakage, and writes a cited, dispute-ready memo — with a visible agent trace.",
+    "Upload your hotel management agreement and monthly operating statements. BellBoy reruns every fee with a deterministic calculator, finds the leakage, and writes a cited, dispute-ready memo — with a visible agent trace.",
 };
 
 export default function RootLayout({
@@ -51,14 +51,14 @@ function SiteHeader() {
         <Link
           href="/"
           className="group flex items-center gap-2.5 rounded-md"
-          aria-label="FeeForensics home"
+          aria-label="BellBoy home"
         >
           <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-sm">
             <ShieldCheck className="h-4 w-4" />
           </span>
           <span className="flex items-baseline gap-1.5">
             <span className="text-[0.95rem] font-semibold tracking-tight text-foreground">
-              FeeForensics
+              BellBoy
             </span>
             <span className="hidden text-xs font-medium text-subtle sm:inline">
               Fee audit agent

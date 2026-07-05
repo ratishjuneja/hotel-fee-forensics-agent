@@ -102,7 +102,7 @@ export default function LandingPage() {
           </h1>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted">
             Your operator charges fees from formulas buried in the agreement.
-            Upload the contract and your monthly statements — FeeForensics
+            Upload the contract and your monthly statements — BellBoy
             extracts the rules, reruns the math with a deterministic calculator,
             finds the leakage, and writes a dispute-ready memo you can trace
             line by line.
