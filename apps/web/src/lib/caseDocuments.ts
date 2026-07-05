@@ -168,10 +168,18 @@ function csvToGroups(docId: string, csv: string): DocGroup[] {
 }
 
 function toSourceDocument(doc: CaseSourceDocument): SourceDocument {
-  const meta = KIND_BY_DOC[doc.docId] ?? {
-    kind: (doc.format === "text" ? "contract" : "statement") as DocKind,
-    synopsis: "Uploaded source document.",
-  };
+  const meta =
+    KIND_BY_DOC[doc.docId] ??
+    (doc.docId.startsWith("doc_extra")
+      ? {
+          kind: (doc.format === "text" ? "contract" : "statement") as DocKind,
+          synopsis:
+            "An extra document you attached — stored with the case, not used in the calculation.",
+        }
+      : {
+          kind: (doc.format === "text" ? "contract" : "statement") as DocKind,
+          synopsis: "Uploaded source document.",
+        });
   return {
     id: doc.docId,
     name: doc.name,

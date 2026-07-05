@@ -4,10 +4,12 @@ import type { PdfExtractor } from "@feeforensics/agent";
 
 import { assembleCase, CaseAssemblyError, type CaseUpload } from "./caseAssembler.js";
 
-const file = (filename: string, content: string) => ({
-  filename,
-  buffer: Buffer.from(content, "utf8"),
-});
+/** A one-file role value (every role now carries an array of files). */
+const file = (filename: string, content: string) => [
+  { filename, buffer: Buffer.from(content, "utf8") },
+];
+
+const raw = (filename: string, buffer: Buffer) => ({ filename, buffer });
 
 const baseUpload = (): CaseUpload => ({
   files: {
@@ -62,20 +64,20 @@ describe("assembleCase", () => {
   });
 
   it("extracts a digital-PDF HMA via the injected extractor", async () => {
-    const pdf = { filename: "hma.pdf", buffer: Buffer.from("%PDF-1.7\n...binary...", "latin1") };
+    const pdf = raw("hma.pdf", Buffer.from("%PDF-1.7\n...binary...", "latin1"));
     const { input } = await assembleCase(
       "case_x",
-      { files: { hma: pdf, statement: baseUpload().files.statement! }, draftEmail: true },
+      { files: { hma: [pdf], statement: baseUpload().files.statement! }, draftEmail: true },
       { pdfExtractor: fakeExtractor },
     );
     expect(input.documents.hma.text).toContain("INCENTIVE MANAGEMENT FEE");
   });
 
   it("rejects a PDF HMA when no extractor is injected", async () => {
-    const pdf = { filename: "hma.pdf", buffer: Buffer.from("%PDF-1.7\n...binary...", "latin1") };
+    const pdf = raw("hma.pdf", Buffer.from("%PDF-1.7\n...binary...", "latin1"));
     await expect(
       assembleCase("case_x", {
-        files: { hma: pdf, statement: baseUpload().files.statement! },
+        files: { hma: [pdf], statement: baseUpload().files.statement! },
         draftEmail: true,
       }),
     ).rejects.toThrow(CaseAssemblyError);
@@ -83,11 +85,11 @@ describe("assembleCase", () => {
 
   it("rejects a scanned PDF (extractor yields no text) with an OCR hint", async () => {
     const emptyExtractor: PdfExtractor = async () => ({ text: "   ", pageCount: 3 });
-    const pdf = { filename: "scan.pdf", buffer: Buffer.from("%PDF-1.7\n", "latin1") };
+    const pdf = raw("scan.pdf", Buffer.from("%PDF-1.7\n", "latin1"));
     try {
       await assembleCase(
         "case_x",
-        { files: { hma: pdf, statement: baseUpload().files.statement! }, draftEmail: true },
+        { files: { hma: [pdf], statement: baseUpload().files.statement! }, draftEmail: true },
         { pdfExtractor: emptyExtractor },
       );
       throw new Error("expected throw");
@@ -103,11 +105,105 @@ describe("assembleCase", () => {
       files: {
         hma: baseUpload().files.hma!,
         statement: baseUpload().files.statement!,
-        support_pack: { filename: "bad.csv", buffer: Buffer.from([0, 1, 2, 3]) },
+        support_pack: [raw("bad.csv", Buffer.from([0, 1, 2, 3]))],
       },
       draftEmail: true,
     });
     expect(input.documents.supportPack).toBeUndefined();
     expect(warnings.find((w) => w.role === "support_pack")?.warnings.join(" ")).toMatch(/CSV/i);
+  });
+
+  it("concatenates multiple support-pack CSVs, deduping the repeated header", async () => {
+    const { input, warnings } = await assembleCase("case_x", {
+      files: {
+        hma: file("hma.txt", "clause"),
+        statement: file("os.csv", "a,b\n1,2\n"),
+        support_pack: [
+          raw("inv1.csv", Buffer.from("Vendor,Amount\nAcme,100\n")),
+          raw("inv2.csv", Buffer.from("Vendor,Amount\nBeta,200\n")),
+        ],
+      },
+      draftEmail: true,
+    });
+    const csv = input.documents.supportPack!.csv;
+    expect(csv).toContain("Acme,100");
+    expect(csv).toContain("Beta,200");
+    // The header should appear exactly once after the merge.
+    expect(csv.match(/Vendor,Amount/g)?.length).toBe(1);
+    expect(input.documents.supportPack!.name).toContain("2 files");
+    expect(warnings.find((w) => w.role === "support_pack")?.warnings.join(" ")).toMatch(
+      /Merged 2 files/,
+    );
+  });
+
+  it("uses the first comparison statement as the baseline and archives the rest", async () => {
+    const { input, warnings } = await assembleCase("case_x", {
+      files: {
+        hma: file("hma.txt", "clause"),
+        statement: file("os.csv", "a,b\n1,2\n"),
+        statement_prior: [
+          raw("may.csv", Buffer.from("a,b\n1,2\n")),
+          raw("apr.csv", Buffer.from("a,b\n3,4\n")),
+        ],
+      },
+      draftEmail: true,
+    });
+    expect(input.documents.priorStatement?.csv).toContain("1,2");
+    expect(input.documents.priorStatement?.csv).not.toContain("3,4");
+    const w = warnings.find((x) => x.role === "statement_prior")?.warnings.join(" ") ?? "";
+    expect(w).toMatch(/baseline/i);
+    expect(w).toContain("apr.csv");
+  });
+
+  it("uses the first supplementary schedule and archives the rest", async () => {
+    const { input, warnings } = await assembleCase("case_x", {
+      files: {
+        hma: file("hma.txt", "clause"),
+        statement: file("os.csv", "a,b\n1,2\n"),
+        supplementary: [
+          raw("misc.csv", Buffer.from("k,v\nfirst,1\n")),
+          raw("other.csv", Buffer.from("k,v\nsecond,2\n")),
+        ],
+      },
+      draftEmail: true,
+    });
+    expect(input.documents.miscBreakout?.csv).toContain("first,1");
+    expect(input.documents.miscBreakout?.csv).not.toContain("second,2");
+    const w = warnings.find((x) => x.role === "supplementary")?.warnings.join(" ") ?? "";
+    expect(w).toContain("other.csv");
+  });
+
+  it("decodes extra documents for display but keeps them out of the audit input", async () => {
+    const { input, extraDocuments } = await assembleCase("case_x", {
+      files: {
+        hma: file("hma.txt", "clause"),
+        statement: file("os.csv", "a,b\n1,2\n"),
+        extra_docs: [
+          raw("sideletter.txt", Buffer.from("we agreed to X")),
+          raw("extra.csv", Buffer.from("k,v\n1,2\n")),
+        ],
+      },
+      draftEmail: true,
+    });
+    expect(extraDocuments).toHaveLength(2);
+    expect(extraDocuments?.[0]?.name).toBe("sideletter.txt");
+    expect(extraDocuments?.[0]?.format).toBe("text");
+    expect(extraDocuments?.[0]?.content).toContain("we agreed to X");
+    expect(extraDocuments?.[1]?.format).toBe("csv");
+    // The calculator input must never see the extra content.
+    expect(JSON.stringify(input.documents)).not.toContain("we agreed to X");
+  });
+
+  it("stores a binary extra document with a note but does not show it", async () => {
+    const { extraDocuments, warnings } = await assembleCase("case_x", {
+      files: {
+        hma: file("hma.txt", "clause"),
+        statement: file("os.csv", "a,b\n1,2\n"),
+        extra_docs: [raw("scan.pdf", Buffer.from("%PDF-1.7\n", "latin1"))],
+      },
+      draftEmail: true,
+    });
+    expect(extraDocuments).toBeUndefined();
+    expect(warnings.find((w) => w.role === "extra_docs")?.warnings.join(" ")).toMatch(/not shown/i);
   });
 });

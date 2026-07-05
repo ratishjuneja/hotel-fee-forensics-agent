@@ -87,8 +87,8 @@ function SiteHeader() {
 function SiteFooter() {
   return (
     <footer className="border-t border-border bg-surface">
-      <div className="mx-auto flex max-w-6xl flex-col gap-1.5 px-4 py-5 text-xs text-subtle sm:px-6">
-        <p>
+      <div className="mx-auto flex max-w-6xl flex-col items-center gap-1.5 px-4 py-5 text-center text-xs text-subtle sm:px-6">
+        <p className="max-w-3xl">
           Every figure on screen is computed by a deterministic calculator from
           the documents you upload. The model extracts rules and drafts prose;
           it never does the arithmetic.

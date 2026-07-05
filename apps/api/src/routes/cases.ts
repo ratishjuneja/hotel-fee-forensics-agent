@@ -25,12 +25,16 @@ export interface CasesRouteOptions {
 /** Per-file cap for the upload route ONLY — the global JSON bodyLimit is untouched. */
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
+/** Total files accepted per upload — the optional roles allow several files each. */
+const MAX_FILES = 24;
+
 const UPLOAD_ROLES: readonly UploadRole[] = [
   "hma",
   "statement",
   "statement_prior",
   "support_pack",
   "supplementary",
+  "extra_docs",
 ];
 
 /**
@@ -54,7 +58,7 @@ export async function casesRoutes(
   // Scoped to this plugin: multipart parsing with a 10MB/file cap. Does NOT
   // change the global bodyLimit used by JSON routes.
   await app.register(fastifyMultipart, {
-    limits: { fileSize: MAX_FILE_BYTES, files: UPLOAD_ROLES.length + 2 },
+    limits: { fileSize: MAX_FILE_BYTES, files: MAX_FILES },
   });
 
   const persistenceUnconfigured = {
@@ -71,7 +75,7 @@ export async function casesRoutes(
     upload: CaseUpload,
   ): Promise<void> => {
     try {
-      const { input, warnings } = await assembleCase(base.id, upload, {
+      const { input, warnings, extraDocuments } = await assembleCase(base.id, upload, {
         ...(options.pdfExtractor ? { pdfExtractor: options.pdfExtractor } : {}),
       });
       await repo.saveCase({
@@ -81,6 +85,7 @@ export async function casesRoutes(
         auditMonth: input.auditMonth,
         parseWarnings: warnings,
         assembledInput: input,
+        ...(extraDocuments ? { extraDocuments } : {}),
       });
     } catch (err) {
       const warnings =
@@ -92,7 +97,9 @@ export async function casesRoutes(
     }
   };
 
-  // POST /api/cases — multipart upload
+  // POST /api/cases — multipart upload. @fastify/multipart streams the body, so
+  // the small global JSON bodyLimit does not apply here; the per-file cap above
+  // (busboy fileSize) is the effective limit.
   app.post("/api/cases", async (request, reply) => {
     if (options.caseRepository === null || options.blobStore === null) {
       return reply.code(503).send(persistenceUnconfigured);
@@ -100,7 +107,9 @@ export async function casesRoutes(
     const repo = options.caseRepository;
     const blobStore = options.blobStore;
 
-    const files: Partial<Record<UploadRole, UploadedFile & { contentType: string }>> = {};
+    // Every role collects an ARRAY of files — the optional roles accept several,
+    // and repeated multipart field names arrive as separate parts.
+    const files: Partial<Record<UploadRole, Array<UploadedFile & { contentType: string }>>> = {};
     const fields: Record<string, string> = {};
 
     try {
@@ -111,12 +120,13 @@ export async function casesRoutes(
             await part.toBuffer();
             continue;
           }
+          const role = part.fieldname as UploadRole;
           const buffer = await part.toBuffer();
-          files[part.fieldname as UploadRole] = {
+          (files[role] ??= []).push({
             filename: part.filename,
             buffer,
             contentType: part.mimetype || "application/octet-stream",
-          };
+          });
         } else {
           fields[part.fieldname] = String(part.value);
         }
@@ -131,7 +141,7 @@ export async function casesRoutes(
       throw err;
     }
 
-    if (!files.hma || !files.statement) {
+    if (!files.hma?.[0] || !files.statement?.[0]) {
       return reply.code(400).send({
         error: "missing_required_document",
         message: "Both an HMA and an operating statement are required.",
@@ -139,22 +149,29 @@ export async function casesRoutes(
     }
 
     const caseId = `case_${randomUUID()}`;
-    const contentTypeByRole = new Map<UploadRole, string>();
 
-    // Store every raw file to Object Storage before we accept the case.
+    // Store every raw file to Object Storage before we accept the case. Keys are
+    // indexed per role so multiple files in one role never collide.
     for (const role of UPLOAD_ROLES) {
-      const file = files[role];
-      if (!file) continue;
-      contentTypeByRole.set(role, file.contentType);
-      await blobStore.put(`${caseId}/${role}/${file.filename}`, file.buffer, file.contentType);
+      const roleFiles = files[role];
+      if (!roleFiles) continue;
+      let i = 0;
+      for (const file of roleFiles) {
+        await blobStore.put(
+          `${caseId}/${role}/${i}-${file.filename}`,
+          file.buffer,
+          file.contentType,
+        );
+        i += 1;
+      }
     }
 
     const draftEmail = fields.draftEmail === undefined ? true : fields.draftEmail !== "false";
     const upload: CaseUpload = {
       files: Object.fromEntries(
-        UPLOAD_ROLES.filter((r) => files[r]).map((r) => [
+        UPLOAD_ROLES.filter((r) => files[r]?.length).map((r) => [
           r,
-          { filename: files[r]!.filename, buffer: files[r]!.buffer },
+          files[r]!.map((f) => ({ filename: f.filename, buffer: f.buffer })),
         ]),
       ),
       draftEmail,
@@ -244,6 +261,8 @@ export async function casesRoutes(
             format: "csv",
             content: doc.csv,
           })),
+        // Extra documents the owner attached — shown verbatim, never calculated on.
+        ...(record.extraDocuments ?? []),
       ];
       return { caseId: record.id, documents };
     },

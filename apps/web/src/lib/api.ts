@@ -67,9 +67,12 @@ export function answerQuestions(
 export interface NewCaseUpload {
   hma: File;
   statement: File;
-  statementPrior?: File;
-  supportPack?: File;
-  supplementary?: File;
+  /** Optional roles accept several files each (repeated multipart field names). */
+  statementPrior?: File[];
+  supportPack?: File[];
+  supplementary?: File[];
+  /** Extra attachments — stored + shown, never fed to the calculator. */
+  extraDocs?: File[];
   ownerNotes?: string;
   /**
    * Case label fields. The statements/HMA carry no reporting month, so the case
@@ -93,15 +96,14 @@ export function createCase(
   const form = new FormData();
   form.append("hma", upload.hma, upload.hma.name);
   form.append("statement", upload.statement, upload.statement.name);
-  if (upload.statementPrior) {
-    form.append("statement_prior", upload.statementPrior, upload.statementPrior.name);
-  }
-  if (upload.supportPack) {
-    form.append("support_pack", upload.supportPack, upload.supportPack.name);
-  }
-  if (upload.supplementary) {
-    form.append("supplementary", upload.supplementary, upload.supplementary.name);
-  }
+  // Multi-file roles: append each under the same field name (repeated parts).
+  const appendAll = (field: string, list?: File[]): void => {
+    for (const file of list ?? []) form.append(field, file, file.name);
+  };
+  appendAll("statement_prior", upload.statementPrior);
+  appendAll("support_pack", upload.supportPack);
+  appendAll("supplementary", upload.supplementary);
+  appendAll("extra_docs", upload.extraDocs);
   if (upload.ownerNotes?.trim()) form.append("ownerNotes", upload.ownerNotes.trim());
   if (upload.hotelName?.trim()) form.append("hotelName", upload.hotelName.trim());
   if (upload.auditMonth?.trim()) form.append("auditMonth", upload.auditMonth.trim());

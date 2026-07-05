@@ -10,7 +10,7 @@ export const metadata = {
 
 export default function NewCasePage() {
   return (
-    <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
       <Button asChild variant="ghost" size="sm" className="-ml-2">
         <Link href="/">
           <ArrowLeft className="h-4 w-4" />
