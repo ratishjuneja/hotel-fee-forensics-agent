@@ -14,6 +14,7 @@ import type { BlobStore } from "./data/blobStore.js";
 import type { CaseRepository } from "./data/caseRepository.js";
 import { createAuditRanker } from "./lib/llm.js";
 import { createBlobStore, createCaseRepository } from "./lib/persistence.js";
+import { pdfjsExtractor } from "./lib/pdfExtractor.js";
 import { createRateLimiter } from "./lib/rateLimit.js";
 import { healthRoutes } from "./routes/health.js";
 import { demoCaseRoutes } from "./routes/demoCase.js";
@@ -99,7 +100,7 @@ export async function buildServer(options: BuildServerOptions = {}) {
     ranker: options.ranker !== undefined ? options.ranker : createAuditRanker(),
     caseRepository,
   });
-  await app.register(casesRoutes, { caseRepository, blobStore });
+  await app.register(casesRoutes, { caseRepository, blobStore, pdfExtractor: pdfjsExtractor });
 
   return app;
 }

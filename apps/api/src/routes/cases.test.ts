@@ -21,6 +21,9 @@ import { InMemoryBlobStore } from "../data/blobStore.fake.js";
 const demoFile = (name: string): Buffer =>
   readFileSync(fileURLToPath(new URL(`../../../../data/demo/${name}`, import.meta.url)));
 
+const fixtureFile = (name: string): Buffer =>
+  readFileSync(fileURLToPath(new URL(`../../test-fixtures/${name}`, import.meta.url)));
+
 // Scripted reranker (keyword overlap), same as audit.test.ts.
 const scriptedRanker: ChunkRanker = async (query, documents) => {
   const terms = query.toLowerCase().split(/\W+/).filter((t) => t.length > 2);
@@ -132,6 +135,34 @@ describe("POST /api/cases — BYO upload → parse → run", () => {
     const report = await app.inject({ method: "GET", url: `/api/cases/${caseId}/report` });
     expect(report.statusCode).toBe(200);
     expect(report.json().totalSuspectedOvercharge).toBe(36580);
+  });
+
+  it("reproduces the golden result when the HMA is uploaded as a digital PDF", async () => {
+    app = await newServer();
+    // Same case, but the HMA arrives as a PDF — exercises the pdfjs extraction path.
+    const parts = demoUploadParts([{ name: "hotelName", value: "The Harborline Hotel" }]).map(
+      (p) =>
+        p.name === "hma"
+          ? { name: "hma", filename: "hma.pdf", contentType: "application/pdf", content: fixtureFile("harborline-hma.pdf") }
+          : p,
+    );
+    const { body, contentType } = buildMultipart(parts);
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/cases",
+      headers: { "content-type": contentType },
+      payload: body,
+    });
+    expect(created.statusCode).toBe(202);
+    const { caseId } = created.json();
+    expect(await waitUntilReady(app, caseId)).toBe("ready");
+
+    const run = await app.inject({ method: "POST", url: `/api/cases/${caseId}/run-audit` });
+    expect(run.statusCode).toBe(200);
+    const audit: RunAuditResponse = run.json();
+    expect(audit.findings.map((f: Finding) => f.suspectedImpact)).toEqual([1980, 6600, 28000]);
+    expect(audit.confidence).toBe(0.96);
+    expect(audit.memo).toContain("$36,580");
   });
 
   it("omits emailDraft when draftEmail=false", async () => {

@@ -19,6 +19,7 @@
     "@feeforensics/shared": "0.1.0",
     "dotenv": "^16.4.5",
     "fastify": "^5.1.0",
+    "pdfjs-dist": "^4.10.38",
     "pg": "^8.22.0",
     "zod": "^3.23.8"
   },

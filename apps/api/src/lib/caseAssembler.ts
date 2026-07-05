@@ -1,4 +1,4 @@
-import type { RunAuditInput } from "@feeforensics/agent";
+import type { PdfExtractor, RunAuditInput } from "@feeforensics/agent";
 
 import type { CaseParseWarning } from "../data/caseRepository.js";
 
@@ -73,21 +73,40 @@ function defaultAuditMonth(now: Date): string {
 }
 
 /**
- * Decode a text document (HMA). `.txt`/`.md` decode as UTF-8. PDFs are rejected
- * for now (digital-PDF text extraction lands in PR-14c) with a clear warning
- * rather than a garbled decode.
+ * Decode a text document (HMA). `.txt`/`.md` decode as UTF-8; a digital PDF is
+ * run through the injected `pdfExtractor` (pdfjs-dist). A scanned PDF (no text
+ * layer) is rejected clearly rather than yielding empty content — OCR lands in
+ * PR-16.
  */
-function decodeTextDoc(file: UploadedFile, warnings: string[]): string | null {
+async function decodeTextDoc(
+  file: UploadedFile,
+  warnings: string[],
+  pdfExtractor?: PdfExtractor,
+): Promise<string | null> {
   const ext = extensionOf(file.filename);
-  if (isPdf(file.buffer) || ext === "pdf") {
-    warnings.push(
-      "PDF text extraction is not available yet (coming in PR-14c). Upload a .txt or .md export for now.",
-    );
-    return null;
-  }
   if (file.buffer.length === 0) {
     warnings.push("File is empty.");
     return null;
+  }
+  if (isPdf(file.buffer) || ext === "pdf") {
+    if (!pdfExtractor) {
+      warnings.push("PDF text extraction is not available here. Upload a .txt or .md export.");
+      return null;
+    }
+    try {
+      const { text } = await pdfExtractor(file.buffer);
+      if (text.trim().length < 20) {
+        warnings.push(
+          "PDF has no extractable text (looks scanned) — OCR is not available yet (PR-16). " +
+            "Upload a digital PDF or a .txt/.md export.",
+        );
+        return null;
+      }
+      return text;
+    } catch (err) {
+      warnings.push(`PDF could not be read: ${String(err)}`);
+      return null;
+    }
   }
   if (looksBinary(file.buffer)) {
     warnings.push("File does not look like text (binary content). Upload a .txt/.md export.");
@@ -113,11 +132,19 @@ function decodeCsvDoc(file: UploadedFile, warnings: string[]): string | null {
   return file.buffer.toString("utf8");
 }
 
-export function assembleCase(
+export interface AssembleOptions {
+  /** Digital-PDF text extractor (pdfjs-dist). Omit to reject PDFs. */
+  pdfExtractor?: PdfExtractor;
+  /** Injectable clock for deterministic default audit-month. */
+  now?: Date;
+}
+
+export async function assembleCase(
   caseId: string,
   upload: CaseUpload,
-  now: Date = new Date(),
-): AssembledCase {
+  opts: AssembleOptions = {},
+): Promise<AssembledCase> {
+  const now = opts.now ?? new Date();
   const warnings: CaseParseWarning[] = [];
   const record = (role: UploadRole, w: string[]): void => {
     warnings.push({ role, documentName: DOC[role].name, warnings: w });
@@ -131,7 +158,7 @@ export function assembleCase(
   }
 
   const hmaWarnings: string[] = [];
-  const hmaText = decodeTextDoc(hmaFile, hmaWarnings);
+  const hmaText = await decodeTextDoc(hmaFile, hmaWarnings, opts.pdfExtractor);
   record("hma", hmaWarnings);
   if (hmaText === null) {
     throw new CaseAssemblyError("HMA could not be read.", warnings);

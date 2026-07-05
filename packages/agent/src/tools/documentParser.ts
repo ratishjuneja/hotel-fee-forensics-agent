@@ -26,10 +26,17 @@ export interface ChunkContext {
   citationPrefix?: string;
 }
 
-/** Extracts text from a digital PDF. Concrete impl (pdf-parse) is injected. */
-export type PdfExtractor = (
-  buffer: Buffer,
-) => Promise<{ text: string; pageCount: number }>;
+/** Result of extracting text from a digital PDF. */
+export interface PdfExtractionResult {
+  /** Full document text (pages joined). */
+  text: string;
+  pageCount: number;
+  /** Per-page text, when the extractor provides it (feeds page-level citations). */
+  pages?: { page: number; text: string }[];
+}
+
+/** Extracts text from a digital PDF. Concrete impl (pdfjs-dist) is injected. */
+export type PdfExtractor = (buffer: Buffer) => Promise<PdfExtractionResult>;
 
 export interface DocumentSource extends ChunkContext {
   fileName: string;
