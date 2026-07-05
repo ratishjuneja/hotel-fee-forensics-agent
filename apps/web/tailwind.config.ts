@@ -63,25 +63,6 @@ const config: Config = {
           soft: "hsl(var(--danger-soft) / <alpha-value>)",
           "soft-foreground": "hsl(var(--danger-soft-foreground) / <alpha-value>)",
         },
-
-        /**
-         * Legacy brand ramp — retuned to the refined blue so screens still
-         * mid-migration onto semantic tokens stay on-palette in light mode.
-         * New code should prefer the semantic tokens above.
-         */
-        brand: {
-          50: "#eef3ff",
-          100: "#dce7ff",
-          200: "#bcd0ff",
-          300: "#8fb0ff",
-          400: "#5f88f7",
-          500: "#3a63e8",
-          600: "#2851c4",
-          700: "#2242a0",
-          800: "#233c86",
-          900: "#20366d",
-          950: "#141f40",
-        },
       },
       borderRadius: {
         sm: "calc(var(--radius) - 4px)",
@@ -123,6 +104,14 @@ const config: Config = {
           from: { transform: "translateX(100%)" },
           to: { transform: "translateX(0)" },
         },
+        // Indeterminate <Progress> sweep. The bar is w-1/3, so translateX %
+        // is relative to the bar's own width: -100% parks it off the left edge
+        // and 300% (3 × one-third-width) carries it fully off the right, so it
+        // crosses the whole track each cycle.
+        "progress-sweep": {
+          from: { transform: "translateX(-100%)" },
+          to: { transform: "translateX(300%)" },
+        },
         "scale-in": {
           from: { opacity: "0", transform: "scale(0.97)" },
           to: { opacity: "1", transform: "scale(1)" },
@@ -136,6 +125,7 @@ const config: Config = {
         "fade-up": "fade-up 0.3s ease-out both",
         "slide-in-right": "slide-in-right 0.25s cubic-bezier(0.32, 0.72, 0, 1)",
         "scale-in": "scale-in 0.15s ease-out",
+        "progress-sweep": "progress-sweep 1.2s ease-in-out infinite",
       },
     },
   },

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Printer } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import type {
   AuditReport,
   Finding,
@@ -47,8 +47,6 @@ export interface ReportViewProps {
   documents?: Record<string, SourceDocument>;
   /** Party/period the dispute packet is addressed with. */
   disputeContext?: DisputeContext;
-  /** Export-PDF (print route) link; omit when the case has no print route. */
-  printHref?: string;
 }
 
 /**
@@ -64,7 +62,6 @@ export function ReportView({
   packetFilename,
   documents,
   disputeContext,
-  printHref,
 }: ReportViewProps) {
   const { findings, calculationResult, memoMarkdown } = report;
   // Derive each finding's detection check from the calculator's line-item
@@ -160,14 +157,6 @@ export function ReportView({
         <div className="mt-10 flex flex-wrap items-center justify-between gap-2">
           <SectionHeading>Audit memo</SectionHeading>
           <div className="flex items-center gap-2">
-            {printHref && (
-              <Button asChild variant="outline" size="sm">
-                <Link href={printHref} target="_blank">
-                  <Printer className="h-4 w-4" />
-                  Export PDF
-                </Link>
-              </Button>
-            )}
             <DownloadButton
               content={memoMarkdown}
               filename={memoFilename}

@@ -7,7 +7,6 @@ import { useTheme, type Theme } from "./ThemeProvider";
 
 const ORDER: Theme[] = ["light", "dark", "system"];
 const ICON = { light: Sun, dark: Moon, system: Monitor } as const;
-const NEXT_LABEL = { light: "dark", dark: "system", system: "light" } as const;
 
 /** Cycles light → dark → system. Icon reflects the current choice. */
 export function ThemeToggle() {
@@ -32,7 +31,7 @@ export function ThemeToggle() {
       variant="ghost"
       size="icon-sm"
       onClick={() => setTheme(next)}
-      title={`Theme: ${theme}. Switch to ${NEXT_LABEL[theme]}.`}
+      title={`Theme: ${theme}. Switch to ${next}.`}
       aria-label={`Switch theme, currently ${theme}`}
     >
       <Icon className="h-[1.05rem] w-[1.05rem]" />

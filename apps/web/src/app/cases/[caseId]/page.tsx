@@ -36,16 +36,27 @@ export default function CaseParsingPage() {
   useEffect(() => {
     let alive = true;
     let timer: ReturnType<typeof setTimeout>;
+    let failures = 0;
     const poll = async () => {
       try {
         const s = await getCaseStatus(caseId);
         if (!alive) return;
+        failures = 0;
         setStatus(s);
         setError(null);
+        // Keep polling only while the parse is still in flight; a terminal
+        // status (ready / failed) stops the chain for good.
         if (s.status === "parsing") timer = setTimeout(poll, POLL_MS);
       } catch (err) {
         if (!alive) return;
-        setError(err instanceof Error ? err.message : "Could not load the case.");
+        failures += 1;
+        // A single blip shouldn't strand the page: keep retrying, and only
+        // surface the error once we've missed several polls in a row (either
+        // the first load never landed, or we lost contact mid-parse).
+        if (failures >= 3) {
+          setError(err instanceof Error ? err.message : "Could not load the case.");
+        }
+        timer = setTimeout(poll, POLL_MS);
       }
     };
     poll();
@@ -102,6 +113,17 @@ export default function CaseParsingPage() {
             Could not load this case.
           </p>
           <p className="mt-1 text-sm text-muted">{error}</p>
+        </Card>
+      )}
+
+      {/* We had the case but a poll started failing — say so instead of
+          spinning silently. Polling keeps retrying in the background. */}
+      {error && status && !ready && !failed && (
+        <Card className="mt-6 border-warning/30 bg-warning-soft/40 p-4">
+          <p className="flex items-center gap-2 text-sm font-medium text-warning-soft-foreground">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            Lost contact while checking parse status — retrying…
+          </p>
         </Card>
       )}
 
