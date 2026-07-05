@@ -42,7 +42,7 @@ const REQUIRED_SLOTS: Slot[] = [
   {
     key: "statement",
     label: "Operating statement",
-    hint: "The audit month's USALI operating statement · CSV",
+    hint: "The month you're auditing, operating statement in USALI format · CSV",
     accept: ".csv",
     required: true,
   },
@@ -51,14 +51,14 @@ const REQUIRED_SLOTS: Slot[] = [
 const OPTIONAL_SLOTS: Slot[] = [
   {
     key: "statementPrior",
-    label: "Prior month's statement",
-    hint: "A baseline for the anomaly checks · CSV",
+    label: "Comparison statements",
+    hint: "One or more earlier months to baseline the anomaly checks · CSV",
     accept: ".csv",
   },
   {
     key: "supportPack",
-    label: "Invoice / support pack",
-    hint: "Backing detail for the month's charges · CSV",
+    label: "Invoices & approvals",
+    hint: "Invoices and approvals backing the month's charges · CSV",
     accept: ".csv",
   },
   {
@@ -137,7 +137,7 @@ export function UploadForm() {
 
       <fieldset className="mt-6 space-y-3">
         <legend className="mb-2 text-xs font-semibold uppercase tracking-wider text-subtle">
-          Optional — strengthen the evidence checks
+          Optional: strengthen the evidence checks
         </legend>
         {OPTIONAL_SLOTS.map((slot) => (
           <FileSlot
@@ -197,7 +197,7 @@ export function UploadForm() {
           <div className="text-sm text-warning-soft-foreground">
             <p className="font-semibold">The upload could not be completed.</p>
             <p className="mt-1 opacity-90">
-              {failure} Your files were not stored or analyzed — nothing was
+              {failure} Your files were not stored or analyzed. Nothing was
               audited. Check the documents and try again.
             </p>
           </div>

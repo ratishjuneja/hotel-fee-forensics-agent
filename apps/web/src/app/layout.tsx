@@ -10,11 +10,11 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "BellBoy — Hotel operator fee audit agent",
+    default: "BellBoy: Hotel operator fee audit agent",
     template: "%s · BellBoy",
   },
   description:
-    "Upload your hotel management agreement and monthly operating statements. BellBoy reruns every fee with a deterministic calculator, finds the leakage, and writes a cited, dispute-ready memo — with a visible agent trace.",
+    "Upload your hotel management agreement and monthly operating statements. BellBoy reruns every fee with a deterministic calculator, finds the leakage, and writes a cited, dispute-ready memo, with a visible agent trace.",
 };
 
 export default function RootLayout({
@@ -84,13 +84,8 @@ function SiteFooter() {
       <div className="mx-auto flex max-w-6xl flex-col gap-1.5 px-4 py-5 text-xs text-subtle sm:px-6">
         <p>
           Every figure on screen is computed by a deterministic calculator from
-          the documents you upload — the model extracts rules and drafts prose,
+          the documents you upload. The model extracts rules and drafts prose;
           it never does the arithmetic.
-        </p>
-        <p>
-          Sample documents used for demos are{" "}
-          <span className="font-medium text-muted">synthetic</span>. No real
-          hotel contracts or customer data.
         </p>
       </div>
     </footer>
