@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { chunkText } from "./documentParser.js";
+import { chunkPages, chunkText } from "./documentParser.js";
 import { calculateFees } from "./feeCalculator.js";
 import {
   RuleExtractionError,
@@ -325,6 +325,31 @@ describe("extractFeeRulesDeterministic — code-only clause parsing", () => {
     expect(rules.incentiveFee!.citation.sectionLabel).toContain("§4.2");
     expect(rules.passThroughRules!.citation.sectionLabel).toContain("§5.1");
     expect(rules.auditRights!.citation.sectionLabel).toContain("§9.2");
+  });
+
+  it("carries each clause's source page onto its citation (PDF provenance)", () => {
+    const pagedChunks = chunkPages(
+      [
+        {
+          page: 3,
+          text:
+            "4.1  BASE MANAGEMENT FEE.\n" +
+            "Base Management Fee equal to 3.0% of Total Operating Revenue.",
+        },
+        {
+          page: 4,
+          text:
+            "4.2  INCENTIVE MANAGEMENT FEE.\n" +
+            "Incentive Fee equal to 10.0% of Gross Operating Profit (GOP).",
+        },
+      ],
+      { caseId: "case_demo_harborline_001", documentId: "doc_hma", citationPrefix: "HMA" },
+    );
+    const { rules } = extractFeeRulesDeterministic(pagedChunks, {
+      documentName: DOCUMENT_NAME,
+    });
+    expect(rules.baseManagementFee!.citation.page).toBe(3);
+    expect(rules.incentiveFee!.citation.page).toBe(4);
   });
 
   it("reproduces the $36,580 golden answer through the calculator", () => {

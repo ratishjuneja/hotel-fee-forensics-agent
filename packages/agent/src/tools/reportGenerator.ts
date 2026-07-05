@@ -31,6 +31,7 @@ import type {
 } from "@feeforensics/shared";
 import { z } from "zod";
 
+import { formatCitation } from "./citationFormat.js";
 import type { ConfidenceScore } from "./decisionEngine.js";
 import type { LlmMessage } from "./ruleExtractor.js";
 
@@ -398,9 +399,9 @@ function buildMemo(
   if (input.findings.length > 0) {
     lines.push("", "### Citation trail");
     input.findings.forEach((f, i) => {
-      const labels = [
-        ...new Set(f.citations.map((c) => c.sectionLabel ?? c.documentName)),
-      ];
+      // Each citation renders to an exact location — clause + document/page, or
+      // financial line + source CSV row — so every claim is verifiable.
+      const labels = [...new Set(f.citations.map(formatCitation))];
       lines.push(`- **F${i + 1} — ${f.title}:** ${labels.join("; ")}`);
     });
   }

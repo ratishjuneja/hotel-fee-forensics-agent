@@ -124,6 +124,14 @@ interface PendingChunk {
   heading: Heading | null;
   headingLine: string | null;
   body: string[];
+  /** Source page the section starts on (heading line, or first body line). */
+  page?: number;
+}
+
+/** A source line tagged with the page it came from (undefined for flat text). */
+interface PagedLine {
+  text: string;
+  page?: number;
 }
 
 /**
@@ -133,26 +141,32 @@ interface PendingChunk {
  */
 const MAX_DOCUMENT_CHARS = 5 * 1024 * 1024;
 
-export function chunkText(text: string, ctx: ChunkContext): DocumentChunk[] {
-  if (text.length > MAX_DOCUMENT_CHARS) {
-    throw new Error(
-      `Document is too large (${text.length} chars > ${MAX_DOCUMENT_CHARS} limit).`,
-    );
-  }
+/**
+ * The clause-aware chunker, operating on page-tagged lines so each chunk can
+ * cite the page it starts on. `chunkText` and `chunkPages` are thin wrappers
+ * that feed lines in — the splitting logic (and therefore the chunk text) is
+ * identical whether or not pages are known.
+ */
+function chunkPagedLines(lines: PagedLine[], ctx: ChunkContext): DocumentChunk[] {
   const prefix = ctx.citationPrefix ?? "Doc";
-  const lines = text.split(/\r?\n/);
 
   const sections: PendingChunk[] = [];
   let current: PendingChunk = { heading: null, headingLine: null, body: [] };
 
   for (const line of lines) {
-    if (SEPARATOR_RE.test(line)) continue; // decorative rules never join a body
-    const heading = matchHeading(line);
+    if (SEPARATOR_RE.test(line.text)) continue; // decorative rules never join a body
+    const heading = matchHeading(line.text);
     if (heading) {
       sections.push(current);
-      current = { heading, headingLine: line.trim(), body: [] };
+      current = {
+        heading,
+        headingLine: line.text.trim(),
+        body: [],
+        page: line.page,
+      };
     } else {
-      current.body.push(line);
+      current.body.push(line.text);
+      if (current.page === undefined) current.page = line.page; // preamble start
     }
   }
   sections.push(current);
@@ -172,17 +186,53 @@ export function chunkText(text: string, ctx: ChunkContext): DocumentChunk[] {
         ? `${section.headingLine}\n${bodyText}`
         : bodyText || section.headingLine || "";
 
-    chunks.push({
+    const chunk: DocumentChunk = {
       id: `${ctx.documentId}_chunk_${++seq}`,
       documentId: ctx.documentId,
       caseId: ctx.caseId,
       text,
       sectionLabel,
       citationLabel,
-    });
+    };
+    if (section.page !== undefined) chunk.page = section.page;
+    chunks.push(chunk);
   }
 
   return chunks;
+}
+
+export function chunkText(text: string, ctx: ChunkContext): DocumentChunk[] {
+  if (text.length > MAX_DOCUMENT_CHARS) {
+    throw new Error(
+      `Document is too large (${text.length} chars > ${MAX_DOCUMENT_CHARS} limit).`,
+    );
+  }
+  return chunkPagedLines(
+    text.split(/\r?\n/).map((line) => ({ text: line })),
+    ctx,
+  );
+}
+
+/**
+ * Chunk a document from its per-page text (as a digital-PDF extractor provides),
+ * so every resulting chunk carries the page its clause begins on for
+ * page-level citation provenance.
+ */
+export function chunkPages(
+  pages: { page: number; text: string }[],
+  ctx: ChunkContext,
+): DocumentChunk[] {
+  const total = pages.reduce((acc, p) => acc + p.text.length, 0);
+  if (total > MAX_DOCUMENT_CHARS) {
+    throw new Error(
+      `Document is too large (${total} chars > ${MAX_DOCUMENT_CHARS} limit).`,
+    );
+  }
+  const lines: PagedLine[] = [];
+  for (const p of pages) {
+    for (const line of p.text.split(/\r?\n/)) lines.push({ text: line, page: p.page });
+  }
+  return chunkPagedLines(lines, ctx);
 }
 
 // --- Top-level parse (format + extraction, then chunk) ----------------------
@@ -222,9 +272,11 @@ export async function parseDocument(
     throw new Error(`No buffer provided for PDF "${source.fileName}".`);
   }
 
-  const { text, pageCount } = await opts.pdfExtractor(source.buffer);
+  const { text, pageCount, pages } = await opts.pdfExtractor(source.buffer);
   if (text.trim().length < 20 && pageCount > 0) {
     throw new ScannedPdfError(source.fileName);
   }
-  return chunkText(text, ctx);
+  // Prefer per-page text so chunks carry page-level provenance; fall back to the
+  // flat text when the extractor did not break it out by page.
+  return pages && pages.length > 0 ? chunkPages(pages, ctx) : chunkText(text, ctx);
 }

@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   ScannedPdfError,
+  chunkPages,
   chunkText,
   detectFormat,
   parseDocument,
@@ -80,6 +81,43 @@ describe("chunkText — Harborline HMA (real data/demo file)", () => {
   });
 });
 
+// --- Page-aware chunking (per-page PDF text) --------------------------------
+
+describe("chunkPages — page-level provenance", () => {
+  const pages = [
+    {
+      page: 1,
+      text: [
+        "PREAMBLE",
+        "This management agreement is entered into by the parties.",
+        "4.1  BASE MANAGEMENT FEE.",
+        "The operator earns 3.0% of Total Operating Revenue.",
+      ].join("\n"),
+    },
+    {
+      page: 2,
+      text: [
+        "4.2  INCENTIVE MANAGEMENT FEE.",
+        "The operator earns 10% of Gross Operating Profit.",
+      ].join("\n"),
+    },
+  ];
+  const chunks = chunkPages(pages, ctx);
+  const find = (fragment: string) =>
+    chunks.find((c) => c.citationLabel.includes(fragment));
+
+  it("stamps each chunk with the page its clause starts on", () => {
+    expect(find("Preamble")?.page).toBe(1);
+    expect(find("§4.1")?.page).toBe(1);
+    expect(find("§4.2")?.page).toBe(2);
+  });
+
+  it("keeps the same clause bodies as the flat chunker (text unchanged)", () => {
+    expect(find("§4.1")?.text.toLowerCase()).toContain("3.0%");
+    expect(find("§4.2")?.text.toLowerCase()).toContain("gross operating profit");
+  });
+});
+
 // --- parseDocument (format handling + injected PDF extractor) ----------------
 
 describe("parseDocument", () => {
@@ -106,6 +144,32 @@ describe("parseDocument", () => {
       { pdfExtractor: async () => ({ text: hmaText, pageCount: 3 }) },
     );
     expect(clauseChunks(chunks)).toHaveLength(7);
+  });
+
+  it("threads per-page text through to page-stamped chunks", async () => {
+    const chunks = await parseDocument(
+      {
+        caseId: ctx.caseId,
+        documentId: ctx.documentId,
+        fileName: "hma.pdf",
+        citationPrefix: "HMA",
+        buffer: Buffer.from("ignored-by-fake"),
+      },
+      {
+        pdfExtractor: async () => ({
+          text: "4.1  BASE MANAGEMENT FEE.\nThree percent.\n4.2  INCENTIVE MANAGEMENT FEE.\nTen percent.",
+          pageCount: 2,
+          pages: [
+            { page: 1, text: "4.1  BASE MANAGEMENT FEE.\nThree percent." },
+            { page: 2, text: "4.2  INCENTIVE MANAGEMENT FEE.\nTen percent." },
+          ],
+        }),
+      },
+    );
+    const find = (fragment: string) =>
+      chunks.find((c) => c.citationLabel.includes(fragment));
+    expect(find("§4.1")?.page).toBe(1);
+    expect(find("§4.2")?.page).toBe(2);
   });
 
   it("rejects a scanned PDF (no extractable text) clearly", async () => {

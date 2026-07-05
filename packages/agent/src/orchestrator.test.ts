@@ -280,6 +280,25 @@ describe("runAudit — golden end-to-end (real data/demo files)", () => {
     ).toBe(true);
   });
 
+  it("attaches verifiable provenance (source row) to citations — numbers unchanged", async () => {
+    const result = await resultPromise;
+    // Provenance is additive: the golden numbers never move.
+    expect(result.findings.map((f) => f.suspectedImpact)).toEqual([1980, 6600, 28000]);
+    // The support-pack approval resolves to its exact CSV row (line 5 of the pack).
+    const approval = result.findings[2]!.citations.find((c) =>
+      c.sectionLabel?.includes("APPROVAL-0612-03"),
+    );
+    expect(approval?.documentId).toBe("doc_support_pack");
+    expect(approval?.row).toBe(5);
+    // Every finding cites at least one exact source location (a CSV row here —
+    // the demo HMA is .txt, so its clause citations carry no page).
+    for (const finding of result.findings) {
+      expect(finding.citations.some((c) => c.row != null || c.page != null)).toBe(true);
+    }
+    // The memo renders the locator inline.
+    expect(result.memo).toContain("(doc_support_pack, row 5)");
+  });
+
   it("scores confidence 96 as a visible sum of components", async () => {
     const result = await resultPromise;
     expect(result.confidence).toBe(0.96);

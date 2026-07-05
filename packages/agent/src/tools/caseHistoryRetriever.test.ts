@@ -52,6 +52,13 @@ describe("parseSupportPack — Harborline June pack (real data/demo CSV)", () =>
     });
   });
 
+  it("pins each record's citation to its source CSV row and doc id", () => {
+    // APPROVAL-0612-03 is on line 5 of 04_support_invoice_pack.csv (header row 1).
+    const approval = byDocId("APPROVAL-0612-03");
+    expect(approval?.citation.row).toBe(5);
+    expect(approval?.citation.lineLabel).toBe("APPROVAL-0612-03");
+  });
+
   it("keeps excluded-revenue annotations as not_applicable with no doc id", () => {
     const annotations = pack.records.filter((r) => r.status === "not_applicable");
     expect(annotations).toHaveLength(2);

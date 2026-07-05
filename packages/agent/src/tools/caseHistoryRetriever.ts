@@ -199,6 +199,9 @@ export function parseSupportPack(
         documentId: opts.sourceDocumentId,
         documentName: opts.documentName,
         sectionLabel: `Support Pack — ${docId ?? relatesTo}`,
+        // r is 0-based with the header at 0, so r + 1 is the 1-based CSV row.
+        row: r + 1,
+        lineLabel: docId ?? relatesTo,
         quote: `${docId ?? "annotation"}: ${relatesTo} — ${rawStatus}${note ? ` (${note})` : ""}`,
       },
     });
