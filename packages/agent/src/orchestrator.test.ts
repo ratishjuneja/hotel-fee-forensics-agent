@@ -222,6 +222,25 @@ const stableInput = (): RunAuditInput => ({
   },
 });
 
+// --- draftEmail toggle -----------------------------------------------------------
+
+describe("runAudit — draftEmail toggle", () => {
+  const { llm } = scriptedLlm();
+
+  it("includes emailDraft by default (draftEmail unset)", async () => {
+    const result = await runAudit(harborlineInput(), { llm, now });
+    expect(result.emailDraft).toBeDefined();
+    expect(result.emailDraft!.subject).toContain("$36,580");
+  });
+
+  it("omits emailDraft when draftEmail is false", async () => {
+    const result = await runAudit({ ...harborlineInput(), draftEmail: false }, { llm, now });
+    expect(result.emailDraft).toBeUndefined();
+    // The audit itself is unaffected — findings and numbers still land.
+    expect(result.findings.map((f) => f.suspectedImpact)).toEqual([1980, 6600, 28000]);
+  });
+});
+
 // --- Golden end-to-end: the Harborline demo case ---------------------------------
 
 describe("runAudit — golden end-to-end (real data/demo files)", () => {
@@ -306,8 +325,8 @@ describe("runAudit — golden end-to-end (real data/demo files)", () => {
     expect(result.memo).toContain("APPROVAL-0612-03");
     expect(result.memo).toContain("$36,580");
     expect(result.memo).toContain("96");
-    expect(result.emailDraft.subject).toContain("The Harborline Hotel");
-    expect(result.emailDraft.subject).toContain("$36,580");
+    expect(result.emailDraft!.subject).toContain("The Harborline Hotel");
+    expect(result.emailDraft!.subject).toContain("$36,580");
     // The scripted prose used only context amounts, so the number guard kept it.
     expect(result.report.executiveSummary).toContain("$36,580");
     expect(result.report.executiveSummary).not.toContain("reconcile to the management agreement");
@@ -463,7 +482,7 @@ describe("runAudit — VultronRetriever-only pipeline (deps = ranker, nothing el
     expect(result.warnings).toEqual([]);
     expect(result.memo).toContain("APPROVAL-0612-03");
     expect(result.memo).toContain("$36,580");
-    expect(result.emailDraft.body).toContain("Meridian Hotel Management");
+    expect(result.emailDraft!.body).toContain("Meridian Hotel Management");
   });
 
   it("badges retrieval as the only model steps — everything else is a TOOL", async () => {
@@ -496,7 +515,7 @@ describe("runAudit — all model transports failing mid-run", () => {
     expect(result.findings.map((f) => f.suspectedImpact)).toEqual([1980, 6600, 28000]);
     expect(result.confidence).toBe(0.96);
     expect(result.memo).toContain("$36,580");
-    expect(result.emailDraft.body).toContain("Meridian Hotel Management");
+    expect(result.emailDraft!.body).toContain("Meridian Hotel Management");
     expect(result.warnings.length).toBeGreaterThanOrEqual(3);
     expect(result.trace.filter((s) => s.status === "warning").length).toBeGreaterThanOrEqual(3);
   });

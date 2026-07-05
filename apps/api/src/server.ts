@@ -3,14 +3,22 @@ import Fastify from "fastify";
 import type { FastifyError } from "fastify";
 import cors from "@fastify/cors";
 import type { ChunkRanker } from "@feeforensics/agent";
-import { corsOrigins, env, isPersistenceConfigured, isRankerConfigured } from "./config/env.js";
+import {
+  corsOrigins,
+  env,
+  isBlobStoreConfigured,
+  isPersistenceConfigured,
+  isRankerConfigured,
+} from "./config/env.js";
+import type { BlobStore } from "./data/blobStore.js";
 import type { CaseRepository } from "./data/caseRepository.js";
 import { createAuditRanker } from "./lib/llm.js";
-import { createCaseRepository } from "./lib/persistence.js";
+import { createBlobStore, createCaseRepository } from "./lib/persistence.js";
 import { createRateLimiter } from "./lib/rateLimit.js";
 import { healthRoutes } from "./routes/health.js";
 import { demoCaseRoutes } from "./routes/demoCase.js";
 import { auditRoutes } from "./routes/audit.js";
+import { casesRoutes } from "./routes/cases.js";
 
 export interface BuildServerOptions {
   /**
@@ -27,6 +35,12 @@ export interface BuildServerOptions {
    * no in-memory production default (see docs/Rules.md).
    */
   caseRepository?: CaseRepository | null;
+  /**
+   * Object storage for uploaded case files (Vultr Object Storage). Omit for the
+   * default (real S3 store when configured, otherwise null → upload route 503s).
+   * Tests inject an in-memory fake.
+   */
+  blobStore?: BlobStore | null;
 }
 
 export async function buildServer(options: BuildServerOptions = {}) {
@@ -76,12 +90,16 @@ export async function buildServer(options: BuildServerOptions = {}) {
     });
   }
 
+  const blobStore =
+    options.blobStore !== undefined ? options.blobStore : createBlobStore();
+
   await app.register(healthRoutes);
   await app.register(demoCaseRoutes);
   await app.register(auditRoutes, {
     ranker: options.ranker !== undefined ? options.ranker : createAuditRanker(),
     caseRepository,
   });
+  await app.register(casesRoutes, { caseRepository, blobStore });
 
   return app;
 }
@@ -101,6 +119,12 @@ async function start() {
       app.log.warn(
         "Vultr persistence is NOT configured — audit runs will 503 until DATABASE_URL " +
           "(Vultr Managed PostgreSQL) is set. There is no in-memory fallback (see docs/Rules.md).",
+      );
+    }
+    if (!isBlobStoreConfigured) {
+      app.log.warn(
+        "Vultr Object Storage is NOT configured — the BYO upload route will 503 until the " +
+          "VULTR_OBJECT_STORAGE_* vars are set.",
       );
     }
   } catch (err) {

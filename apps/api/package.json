@@ -12,7 +12,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1079.0",
     "@fastify/cors": "^10.0.1",
+    "@fastify/multipart": "^9.4.0",
     "@feeforensics/agent": "0.1.0",
     "@feeforensics/shared": "0.1.0",
     "dotenv": "^16.4.5",

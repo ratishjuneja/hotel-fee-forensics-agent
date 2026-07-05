@@ -1,5 +1,5 @@
 import type { AuditReport } from "@feeforensics/shared";
-import type { CaseRepository } from "./caseRepository.js";
+import type { CaseRecord, CaseRepository } from "./caseRepository.js";
 
 /**
  * TEST DOUBLE — never wire this into production (`buildServer`'s default is the
@@ -13,9 +13,19 @@ import type { CaseRepository } from "./caseRepository.js";
  */
 export class InMemoryCaseRepository implements CaseRepository {
   private readonly reports = new Map<string, AuditReport>();
+  private readonly cases = new Map<string, CaseRecord>();
 
   async init(): Promise<void> {
     // No schema to migrate for the in-memory double.
+  }
+
+  async saveCase(record: CaseRecord): Promise<void> {
+    this.cases.set(record.id, structuredClone(record));
+  }
+
+  async getCase(caseId: string): Promise<CaseRecord | null> {
+    const record = this.cases.get(caseId);
+    return record ? structuredClone(record) : null;
   }
 
   async saveReport(caseId: string, report: AuditReport): Promise<void> {
@@ -29,5 +39,6 @@ export class InMemoryCaseRepository implements CaseRepository {
 
   async close(): Promise<void> {
     this.reports.clear();
+    this.cases.clear();
   }
 }
