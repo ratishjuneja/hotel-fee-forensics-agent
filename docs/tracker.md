@@ -18,12 +18,12 @@
 | Fee calculator | Person A | Done | Deterministic math in `packages/agent`; golden test re-based to Harborline **$36,580** (`harborlineCase.ts`); excluded-revenue sets now rule-driven (`FeeRules.*.excludedCategories`) |
 | Anomaly + evidence checks | Person A | ✅ Wired | `anomalyChecker.ts` (PR-5) + `caseHistoryRetriever.ts` support-pack Check 5 (PR-6 / PR #17); deterministic, tested against the demo pack; wired into orchestrator steps 6–8 |
 | Security hardening | Person A | ✅ Done | PR #16 — prompt-injection delimiting in agent tools, error info-leak fixes, markdown exfil guards, rate limiting, vitest bump |
-| Frontend shell | Person B | ✅ Scaffolded | Next.js+TS+Tailwind on :3000, wired to live API (see §8) |
-| Agent trace UI | Person B | 🟡 Baseline | Staged reveal + LLM/TOOL badges + loop highlight; polish left |
-| Findings UI | Person B | 🟡 Baseline | Cards + check tags + $ impact + citations; polish left |
-| Memo/email output | Person B | 🟡 Baseline | Memo (markdown + download) + email (copy) render from API |
+| Frontend shell | Person B | ✅ Built + deployed | Next.js+TS+Tailwind on the new design system (tokens, self-hosted fonts, Radix a11y layer, light/dark); **upload-only** entry point — all seeded/demo data removed, renders only from real runs; user-facing product renamed **BellBoy** (`1c21ea5`); wired to live API and deployed behind Caddy (see Deployment row) |
+| Agent trace UI | Person B | ✅ Done | Redesigned auto-recentering trace — staged reveal + LLM/TOOL/HUMAN badges + loop highlight |
+| Findings UI | Person B | ✅ Done | Redesigned report — findings cards (check tags + $ impact + citations), deterministic calculator ledger, evidence drawer |
+| Memo/email output | Person B | ✅ Done | Memo (markdown + download) + dispute email (copy) render from API; human-in-the-loop answer form for paused runs (PR-19) |
 | Pitch | Person C | Not started | 3-minute script |
-| Deployment | Person A/B | ✅ Live (required) | Vultr VM `feeforensics-demo` behind Caddy → public demo URL http://65.20.86.52; deployment is a **required** deliverable (`docs/Rules.md`), not "if time" |
+| Deployment | Person A/B | ✅ Live (required) | Vultr VM `feeforensics-demo` behind Caddy → public demo URL https://bellboy-cv.duckdns.org (VM `65.20.86.52`; HTTP 308-redirects to HTTPS); deployment is a **required** deliverable (`docs/Rules.md`), not "if time" |
 
 ## 2. Must-Have Tasks
 
