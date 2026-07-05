@@ -2,10 +2,9 @@ import type {
   AuditReport,
   CaseDocumentsResponse,
   CaseStatusResponse,
-  DemoCaseResponse,
   RunAuditResponse,
 } from "@feeforensics/shared";
-import { API_BASE_URL, DEMO_CASE_ID } from "./constants";
+import { API_BASE_URL } from "./constants";
 
 /** Thrown on any non-2xx API response; carries the HTTP status. */
 export class ApiError extends Error {
@@ -35,22 +34,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** GET /api/demo-case — preloaded synthetic case metadata + expected outputs. */
-export function getDemoCase(): Promise<DemoCaseResponse> {
-  return request<DemoCaseResponse>("/api/demo-case");
-}
-
-/** POST /api/cases/:caseId/run-audit — runs the (currently mocked) agent. */
-export function runAudit(
-  caseId: string = DEMO_CASE_ID,
-): Promise<RunAuditResponse> {
+/** POST /api/cases/:caseId/run-audit — runs the agent over an uploaded case. */
+export function runAudit(caseId: string): Promise<RunAuditResponse> {
   return request<RunAuditResponse>(`/api/cases/${caseId}/run-audit`, {
     method: "POST",
   });
 }
 
 /** GET /api/cases/:caseId/report — latest full audit report. */
-export function getReport(caseId: string = DEMO_CASE_ID): Promise<AuditReport> {
+export function getReport(caseId: string): Promise<AuditReport> {
   return request<AuditReport>(`/api/cases/${caseId}/report`);
 }
 

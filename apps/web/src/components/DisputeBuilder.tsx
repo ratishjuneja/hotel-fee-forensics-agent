@@ -29,10 +29,10 @@ const KIND_STYLE: Record<string, string> = {
 export function DisputeBuilder({
   findings,
   context,
-  packetFilename = "harborline-dispute-packet.md",
+  packetFilename = "dispute-packet.md",
 }: {
   findings: Finding[];
-  /** Party/period the packet is addressed with. Omit for the demo case. */
+  /** Party/period the packet is addressed with, from the uploaded case. */
   context?: DisputeContext;
   packetFilename?: string;
 }) {

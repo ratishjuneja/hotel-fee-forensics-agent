@@ -33,7 +33,7 @@ const ACTION_LABEL: Record<RecommendedAction, string> = {
 
 export interface ReportViewProps {
   report: AuditReport;
-  /** Sub-headline under the impact number, e.g. "The Harborline Hotel · June 2026". */
+  /** Sub-headline under the impact number, e.g. "<hotel name> · <audit month>". */
   subtitle: string;
   /** "Back to trace" target. */
   backHref: string;
@@ -50,9 +50,9 @@ export interface ReportViewProps {
 }
 
 /**
- * The findings + calculation + memo + dispute report body, shared by the demo
- * case and uploaded cases. The only differences between them are the labels,
- * the evidence-document registry, and whether a print route exists.
+ * The findings + calculation + memo + dispute report body for an uploaded case.
+ * Everything it renders comes from the case's own run: the report, the evidence
+ * registry built from the uploaded documents, and the case's party/period labels.
  */
 export function ReportView({
   report,
@@ -96,7 +96,12 @@ export function ReportView({
           </div>
           <div>
             <p className="text-sm text-slate-600">Confidence</p>
-            <ConfidenceMeter confidence={report.confidence} />
+            <ConfidenceMeter
+              confidence={report.confidence}
+              {...(report.confidenceBreakdown
+                ? { breakdown: report.confidenceBreakdown }
+                : {})}
+            />
           </div>
         </section>
 

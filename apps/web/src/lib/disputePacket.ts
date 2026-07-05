@@ -11,7 +11,10 @@ import { formatCurrency } from "./utils";
  * lifted from each finding's citations, so the packet stays cited.
  */
 
-/** Party/period labels the packet is addressed with. Defaults to the demo case. */
+/**
+ * Party/period labels the packet is addressed with, sourced from the uploaded
+ * case. Unknown fields fall back to neutral placeholders — never a seeded case.
+ */
 export interface DisputeContext {
   hotel: string;
   period: string;
@@ -19,22 +22,12 @@ export interface DisputeContext {
   owner?: string;
 }
 
-const DEMO_CONTEXT: Required<DisputeContext> = {
-  hotel: "The Harborline Hotel",
-  period: "June 2026",
-  operator: "Meridian Hotel Management",
-  owner: "Cascadia Hotel Owner LP",
-};
-
-const withDefaults = (ctx?: DisputeContext): Required<DisputeContext> => {
-  if (!ctx) return DEMO_CONTEXT;
-  return {
-    hotel: ctx.hotel,
-    period: ctx.period,
-    operator: ctx.operator ?? "the Operator",
-    owner: ctx.owner ?? "the Owner",
-  };
-};
+const withDefaults = (ctx?: DisputeContext): Required<DisputeContext> => ({
+  hotel: ctx?.hotel ?? "the Hotel",
+  period: ctx?.period ?? "the audit period",
+  operator: ctx?.operator ?? "the Operator",
+  owner: ctx?.owner ?? "the Owner",
+});
 
 /**
  * Finding titles/explanations are LLM-influenced (derived from documents an

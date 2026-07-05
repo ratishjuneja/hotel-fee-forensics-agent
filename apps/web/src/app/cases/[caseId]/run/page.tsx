@@ -19,9 +19,10 @@ import { formatCurrency, formatPercent } from "@/lib/utils";
 const STEP_DELAY_MS = 750;
 
 /**
- * Agent run for an UPLOADED case. Unlike the demo run there is deliberately no
- * bundled-replay fallback: replaying canned Harborline output for someone
- * else's documents would fake an analysis. Failures surface honestly instead.
+ * Agent run for an uploaded case. There is deliberately no bundled-replay
+ * fallback: replaying canned output for someone else's documents would fake an
+ * analysis. Every trace step, finding, and number comes from the live run;
+ * failures surface honestly instead.
  */
 export default function CaseRunPage() {
   const { caseId } = useParams<{ caseId: string }>();
