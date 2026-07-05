@@ -2,6 +2,32 @@
 
 Guidance for Claude Code (and any AI agent) working in this repository.
 
+## ⚠️ Non-negotiable requirements (Vultr) — read first
+
+The full sponsor "Developer Expectations" live in **[`docs/Rules.md`](docs/Rules.md)** (the
+source of truth). We keep drifting off these, so they are restated here where every agent
+sees them. **Do not deviate without the human's explicit say-so.**
+
+- **VultronRetriever via Vultr Serverless Inference is THE model.** All core LLM reasoning
+  and document retrieval go through VultronRetriever models on Vultr Serverless Inference
+  (OpenAI-compatible). Other models are allowed ONLY for chat facilitation / UI / secondary
+  tasks — **never in the audit path**. The pipeline's only model is the VultronRetrieverPrime
+  reranker on `/v1/rerank` (it scores, it never generates); everything else is deterministic
+  code.
+- **Persistence runs on Vultr — no in-memory fallback.** Case metadata, parse status,
+  assembled input, and audit reports live in **Vultr Managed PostgreSQL**; uploaded files
+  live in **Vultr Object Storage**, behind a thin repository layer. In-memory stores that
+  stand in for the DB read as "faking it" under open-source judging and are not allowed in
+  production code. (Tests may inject an in-memory *fake* repository — that's a legitimate
+  test double, not a production path.)
+- **Backend deployed on Vultr + a public demo URL.** Deployment is in scope, not optional.
+- **No secrets in the repo.** `.env` / keys / credentials never get committed; document env
+  vars in `.env.example` only. The account-level `VULTR_API_KEY` stays on the laptop — never
+  on the VM or in the repo.
+- **Golden regression must never move.** Harborline June-vs-May → **$36,580**; findings
+  1980 / 6600 / 28000; confidence **0.96** = [25,25,20,16,10]; memo cites `APPROVAL-0612-03`;
+  trace exactly 3 LLM + 7 TOOL badges; the demo run does NOT pause.
+
 ## What this is
 
 **FeeForensics** — an owner-side enterprise agent that audits hotel operator fees. It
@@ -30,9 +56,10 @@ suggestion inside these lines.
   demo documents and financials must be **synthetic** — never real hotel contracts, real
   customer data, or proprietary assets.
 - **Vultr must be in the core path.** All LLM calls go through **Vultr Serverless
-  Inference** (OpenAI-compatible API). It must not be a decorative add-on. Stretch: Vultr
-  Object Storage for uploads, Vultr Managed PostgreSQL for case metadata, Vultr Cloud
-  Compute for deployment.
+  Inference** (OpenAI-compatible API). It must not be a decorative add-on. Persistence is
+  **required, not stretch**: **Vultr Object Storage** for uploads and **Vultr Managed
+  PostgreSQL** for case metadata / reports (no in-memory fallback), plus **Vultr Cloud
+  Compute** for deployment. See the non-negotiable section above and `docs/Rules.md`.
 - **No secrets in the repo.** Never commit `.env`, API keys, or credentials. Document env
   vars in `.env.example` only.
 - **Avoid the banned-project traps.** This must NOT read as a basic RAG app, an image

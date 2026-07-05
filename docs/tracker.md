@@ -1,5 +1,10 @@
 # Tracker: FeeForensics Hackathon Build
 
+> **Non-negotiable requirements live in [`docs/Rules.md`](Rules.md)** (sponsor Developer
+> Expectations + the golden regression). Re-read them before scoping — Vultr persistence
+> (Postgres + Object Storage, no in-memory fallback), VultronRetriever-only audit path, and
+> a deployed public demo URL are all **required, not stretch**.
+
 ## 1. Current Status
 
 | Area | Owner | Status | Notes |
@@ -18,7 +23,7 @@
 | Findings UI | Person B | 🟡 Baseline | Cards + check tags + $ impact + citations; polish left |
 | Memo/email output | Person B | 🟡 Baseline | Memo (markdown + download) + email (copy) render from API |
 | Pitch | Person C | Not started | 3-minute script |
-| Deployment | Person A/B | Not started | Local acceptable if Vultr inference works, deploy if time |
+| Deployment | Person A/B | ✅ Live (required) | Vultr VM `feeforensics-demo` behind Caddy → public demo URL http://65.20.86.52; deployment is a **required** deliverable (`docs/Rules.md`), not "if time" |
 
 ## 2. Must-Have Tasks
 
