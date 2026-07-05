@@ -109,6 +109,18 @@ export interface RunAuditInput {
   operatorName?: string;
   ownerName?: string;
   documents: RunAuditDocuments;
+  /**
+   * Free-text owner comments captured at upload. Persisted with the case and
+   * (future work) surfaced as a retrievable, cited "Owner notes" document; today
+   * it is carried through but does not yet influence findings.
+   */
+  ownerNotes?: string;
+  /**
+   * Whether to generate the draft dispute email. Defaults to `true` (the demo
+   * and existing callers keep their email). When `false`, the orchestrator skips
+   * email generation and omits `emailDraft` from the response.
+   */
+  draftEmail?: boolean;
 }
 
 export interface RunAuditDeps {
@@ -721,13 +733,18 @@ export async function runAudit(
     status: reportWarnings.length > 0 ? "warning" : "completed",
   });
 
+  // draftEmail defaults to true; only an explicit `false` opts out. The report
+  // still carries the deterministic email skeleton, but the API response omits
+  // `emailDraft` so the client renders no dispute email.
+  const includeEmail = input.draftEmail !== false;
+
   return {
     caseId: input.caseId,
     status: "completed",
     trace,
     findings,
     memo: report.memoMarkdown,
-    emailDraft: report.disputeEmail,
+    ...(includeEmail ? { emailDraft: report.disputeEmail } : {}),
     confidence: confidence.confidence,
     confidenceBreakdown: confidence.breakdown,
     report,

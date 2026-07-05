@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import {
   runAudit,
   type ChunkRanker,
+  type RunAuditInput,
   type RunAuditResult,
 } from "@feeforensics/agent";
 import type { AuditReport } from "@feeforensics/shared";
@@ -36,11 +37,11 @@ type AuditRouteResponse = Omit<RunAuditResult, "report">;
 
 /**
  * Real audit routes: POST run-audit executes the full agent pipeline
- * (packages/agent `runAudit`) over the preloaded demo documents, synchronously
- * in the request — the web client awaits the POST, exactly as it did with the
- * mock. The resulting report is persisted to Vultr Managed PostgreSQL (via the
- * injected `CaseRepository`) for GET /report. Only the preloaded demo case is
- * supported in the MVP.
+ * (packages/agent `runAudit`) synchronously in the request — the web client
+ * awaits the POST. The input is either the preloaded demo case
+ * (`case_demo_hotel_001`) or an uploaded BYO case's assembled input looked up
+ * from the store. The resulting report is persisted to Vultr Managed PostgreSQL
+ * (via the injected `CaseRepository`) for GET /report.
  */
 export async function auditRoutes(
   app: FastifyInstance,
@@ -54,19 +55,12 @@ export async function auditRoutes(
   };
 
   // POST /api/cases/:caseId/run-audit
-  // Body is intentionally not schema-validated: the client sends no body and
-  // the run reads only the preloaded documents. Global `bodyLimit` (server.ts)
-  // caps size; add a body schema when run options become a real input.
+  // Body is intentionally not schema-validated: the run reads the demo case or
+  // the stored assembled input. Global `bodyLimit` (server.ts) caps size.
   app.post<{ Params: CaseParams }>(
     "/api/cases/:caseId/run-audit",
     async (request, reply): Promise<AuditRouteResponse | void> => {
       const { caseId } = request.params;
-      if (caseId !== DEMO_CASE_ID) {
-        return reply.code(404).send({
-          error: "case_not_found",
-          message: `Only the demo case (${DEMO_CASE_ID}) is available in the MVP.`,
-        });
-      }
       if (options.ranker === null) {
         return reply.code(503).send({
           error: "vultr_not_configured",
@@ -80,7 +74,36 @@ export async function auditRoutes(
         return reply.code(503).send(persistenceUnconfigured);
       }
 
-      const { report, ...response } = await runAudit(loadDemoAuditInput(), {
+      // Resolve the run input: the preloaded demo case, or an uploaded case's
+      // assembled input from the store.
+      let input: RunAuditInput;
+      if (caseId === DEMO_CASE_ID) {
+        input = loadDemoAuditInput();
+      } else {
+        const record = await options.caseRepository.getCase(caseId);
+        if (!record) {
+          return reply.code(404).send({
+            error: "case_not_found",
+            message: "No such case. Upload documents at POST /api/cases first.",
+          });
+        }
+        if (record.status === "parsing") {
+          return reply.code(409).send({
+            error: "case_not_ready",
+            message: "This case is still parsing — poll GET /api/cases/:id until status is ready.",
+          });
+        }
+        if (record.status === "failed" || !record.assembledInput) {
+          return reply.code(422).send({
+            error: "case_parse_failed",
+            message: "This case's documents could not be parsed.",
+            parseWarnings: record.parseWarnings,
+          });
+        }
+        input = record.assembledInput;
+      }
+
+      const { report, ...response } = await runAudit(input, {
         ranker: options.ranker,
       });
       await options.caseRepository.saveReport(caseId, report);
@@ -99,12 +122,6 @@ export async function auditRoutes(
     "/api/cases/:caseId/report",
     async (request, reply): Promise<AuditReport | void> => {
       const { caseId } = request.params;
-      if (caseId !== DEMO_CASE_ID) {
-        return reply.code(404).send({
-          error: "case_not_found",
-          message: `Only the demo case (${DEMO_CASE_ID}) is available in the MVP.`,
-        });
-      }
       if (options.caseRepository === null) {
         return reply.code(503).send(persistenceUnconfigured);
       }

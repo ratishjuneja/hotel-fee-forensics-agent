@@ -56,6 +56,16 @@ const EnvSchema = z.object({
    * persistence. Optional here only so the API still boots for local UI work.
    */
   DATABASE_URL: z.string().min(1).optional(),
+
+  /**
+   * Vultr Object Storage (S3-compatible) for uploaded case files. Required for
+   * the BYO-upload route — no in-memory fallback (docs/Rules.md); the upload
+   * route 503s when unset. Optional here so the API still boots without it.
+   */
+  VULTR_OBJECT_STORAGE_ENDPOINT: z.string().url().optional(),
+  VULTR_OBJECT_STORAGE_ACCESS_KEY: z.string().min(1).optional(),
+  VULTR_OBJECT_STORAGE_SECRET_KEY: z.string().min(1).optional(),
+  VULTR_OBJECT_STORAGE_BUCKET: z.string().min(1).optional(),
 });
 
 export const env = EnvSchema.parse(process.env);
@@ -81,6 +91,18 @@ export const isRankerConfigured = Boolean(
  * false, the audit routes 503 rather than falling back to an in-memory store.
  */
 export const isPersistenceConfigured = Boolean(env.DATABASE_URL);
+
+/**
+ * Whether Vultr Object Storage is configured for uploaded case files. When
+ * false, the BYO-upload route 503s rather than dropping files or using an
+ * in-memory store.
+ */
+export const isBlobStoreConfigured = Boolean(
+  env.VULTR_OBJECT_STORAGE_ENDPOINT &&
+    env.VULTR_OBJECT_STORAGE_ACCESS_KEY &&
+    env.VULTR_OBJECT_STORAGE_SECRET_KEY &&
+    env.VULTR_OBJECT_STORAGE_BUCKET,
+);
 
 export const corsOrigins = env.CORS_ORIGIN.split(",")
   .map((o) => o.trim())

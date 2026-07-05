@@ -317,7 +317,8 @@ export interface RunAuditResponse {
   trace: AgentTraceStep[];
   findings: Finding[];
   memo: string;
-  emailDraft: DisputeEmail;
+  /** Omitted when the case opted out of email generation (draftEmail=false). */
+  emailDraft?: DisputeEmail;
   confidence: number;
   confidenceBreakdown?: ConfidenceComponent[];
 }

@@ -1,4 +1,32 @@
+import type { RunAuditInput } from "@feeforensics/agent";
 import type { AuditReport } from "@feeforensics/shared";
+
+/** Async parse lifecycle for an uploaded (BYO) case. */
+export type ParseStatus = "parsing" | "ready" | "failed";
+
+/** Per-document parse feedback surfaced to the frontend while it polls. */
+export interface CaseParseWarning {
+  /** Upload role, e.g. "hma" | "statement" | "support_pack". */
+  role: string;
+  documentName: string;
+  warnings: string[];
+}
+
+/**
+ * A persisted BYO case. Created with status `parsing`; the async parse job then
+ * sets `assembledInput` + status `ready` (or `failed` with warnings). The demo
+ * case does NOT use this — run-audit falls back to the demo loader for it.
+ */
+export interface CaseRecord {
+  id: string;
+  status: ParseStatus;
+  hotelName: string;
+  auditMonth: string;
+  createdAt: string;
+  parseWarnings: CaseParseWarning[];
+  /** The orchestrator input, present once parsing succeeds. */
+  assembledInput: RunAuditInput | null;
+}
 
 /**
  * Persistence boundary for audit reports (case metadata + uploaded-file storage
@@ -21,6 +49,13 @@ export interface CaseRepository {
    * Safe to call on every boot.
    */
   init(): Promise<void>;
+
+  /** Persist (upsert) a BYO case record — creation, status changes, and the
+   *  assembled input all go through here. */
+  saveCase(record: CaseRecord): Promise<void>;
+
+  /** The persisted case record, or `null` if the id is unknown. */
+  getCase(caseId: string): Promise<CaseRecord | null>;
 
   /** Persist (upsert) the latest audit report for a case. */
   saveReport(caseId: string, report: AuditReport): Promise<void>;

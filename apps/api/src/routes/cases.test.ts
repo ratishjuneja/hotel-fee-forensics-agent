@@ -1,0 +1,200 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+import { afterEach, describe, expect, it } from "vitest";
+
+import type { ChunkRanker } from "@feeforensics/agent";
+import type { Finding, RunAuditResponse } from "@feeforensics/shared";
+
+import { buildServer } from "../server.js";
+import { InMemoryCaseRepository } from "../data/caseRepository.fake.js";
+import { InMemoryBlobStore } from "../data/blobStore.fake.js";
+
+/**
+ * BYO upload flow: POST /api/cases (multipart) → poll GET /api/cases/:id →
+ * run-audit on the assembled case. The headline test drives the REAL demo
+ * documents through the upload path and asserts the golden $36,580 reproduces —
+ * proving upload → parse → store → run is wired end-to-end. Persistence uses the
+ * in-memory doubles (never the production default).
+ */
+
+const demoFile = (name: string): Buffer =>
+  readFileSync(fileURLToPath(new URL(`../../../../data/demo/${name}`, import.meta.url)));
+
+// Scripted reranker (keyword overlap), same as audit.test.ts.
+const scriptedRanker: ChunkRanker = async (query, documents) => {
+  const terms = query.toLowerCase().split(/\W+/).filter((t) => t.length > 2);
+  return documents
+    .map((doc, index) => ({
+      index,
+      score: terms.filter((t) => doc.toLowerCase().includes(t)).length,
+    }))
+    .sort((a, b) => b.score - a.score);
+};
+
+interface MultipartField {
+  name: string;
+  value?: string;
+  filename?: string;
+  contentType?: string;
+  content?: Buffer;
+}
+
+/** Build a multipart/form-data body with a fixed boundary (no form-data dep). */
+function buildMultipart(parts: MultipartField[]): { body: Buffer; contentType: string } {
+  const boundary = "----feeforensicstestboundary";
+  const chunks: Buffer[] = [];
+  for (const part of parts) {
+    chunks.push(Buffer.from(`--${boundary}\r\n`));
+    if (part.content !== undefined) {
+      chunks.push(
+        Buffer.from(
+          `Content-Disposition: form-data; name="${part.name}"; filename="${part.filename}"\r\n` +
+            `Content-Type: ${part.contentType ?? "application/octet-stream"}\r\n\r\n`,
+        ),
+      );
+      chunks.push(part.content);
+      chunks.push(Buffer.from("\r\n"));
+    } else {
+      chunks.push(
+        Buffer.from(`Content-Disposition: form-data; name="${part.name}"\r\n\r\n${part.value ?? ""}\r\n`),
+      );
+    }
+  }
+  chunks.push(Buffer.from(`--${boundary}--\r\n`));
+  return {
+    body: Buffer.concat(chunks),
+    contentType: `multipart/form-data; boundary=${boundary}`,
+  };
+}
+
+const demoUploadParts = (extra: MultipartField[] = []): MultipartField[] => [
+  { name: "hma", filename: "hma.txt", contentType: "text/plain", content: demoFile("01_HMA_excerpt.txt") },
+  { name: "statement", filename: "os.csv", contentType: "text/csv", content: demoFile("02_operating_statement_june.csv") },
+  { name: "supplementary", filename: "breakout.csv", contentType: "text/csv", content: demoFile("02b_misc_income_breakout_june.csv") },
+  { name: "statement_prior", filename: "may.csv", contentType: "text/csv", content: demoFile("03_operating_statement_may.csv") },
+  { name: "support_pack", filename: "support.csv", contentType: "text/csv", content: demoFile("04_support_invoice_pack.csv") },
+  ...extra,
+];
+
+type Server = Awaited<ReturnType<typeof buildServer>>;
+const newServer = (): Promise<Server> =>
+  buildServer({
+    ranker: scriptedRanker,
+    caseRepository: new InMemoryCaseRepository(),
+    blobStore: new InMemoryBlobStore(),
+  });
+
+/** Poll the status endpoint until parsing finishes (fast for text/CSV). */
+async function waitUntilReady(app: Server, caseId: string): Promise<string> {
+  for (let i = 0; i < 40; i++) {
+    const res = await app.inject({ method: "GET", url: `/api/cases/${caseId}` });
+    const status = res.json().status as string;
+    if (status !== "parsing") return status;
+    await new Promise((r) => setTimeout(r, 15));
+  }
+  return "parsing";
+}
+
+describe("POST /api/cases — BYO upload → parse → run", () => {
+  let app: Server;
+  afterEach(async () => {
+    if (app) await app.close();
+  });
+
+  it("reproduces the golden $36,580 when the demo files are uploaded", async () => {
+    app = await newServer();
+    const { body, contentType } = buildMultipart(
+      demoUploadParts([{ name: "hotelName", value: "The Harborline Hotel" }]),
+    );
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/cases",
+      headers: { "content-type": contentType },
+      payload: body,
+    });
+    expect(created.statusCode).toBe(202);
+    const { caseId, status } = created.json();
+    expect(status).toBe("parsing");
+
+    expect(await waitUntilReady(app, caseId)).toBe("ready");
+
+    const run = await app.inject({ method: "POST", url: `/api/cases/${caseId}/run-audit` });
+    expect(run.statusCode).toBe(200);
+    const audit: RunAuditResponse & { warnings: string[] } = run.json();
+    expect(audit.findings.map((f: Finding) => f.suspectedImpact)).toEqual([1980, 6600, 28000]);
+    expect(audit.confidence).toBe(0.96);
+    expect(audit.memo).toContain("$36,580");
+    expect(audit.memo).toContain("APPROVAL-0612-03");
+    expect(audit.emailDraft).toBeDefined();
+
+    // Report persisted and retrievable for the uploaded case id.
+    const report = await app.inject({ method: "GET", url: `/api/cases/${caseId}/report` });
+    expect(report.statusCode).toBe(200);
+    expect(report.json().totalSuspectedOvercharge).toBe(36580);
+  });
+
+  it("omits emailDraft when draftEmail=false", async () => {
+    app = await newServer();
+    const { body, contentType } = buildMultipart(
+      demoUploadParts([{ name: "draftEmail", value: "false" }]),
+    );
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/cases",
+      headers: { "content-type": contentType },
+      payload: body,
+    });
+    const { caseId } = created.json();
+    await waitUntilReady(app, caseId);
+    const run = await app.inject({ method: "POST", url: `/api/cases/${caseId}/run-audit` });
+    expect(run.statusCode).toBe(200);
+    expect(run.json().emailDraft).toBeUndefined();
+  });
+
+  it("400s when a required document is missing", async () => {
+    app = await newServer();
+    const { body, contentType } = buildMultipart([
+      { name: "hma", filename: "hma.txt", contentType: "text/plain", content: demoFile("01_HMA_excerpt.txt") },
+    ]);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/cases",
+      headers: { "content-type": contentType },
+      payload: body,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("missing_required_document");
+  });
+
+  it("404s GET status for an unknown case", async () => {
+    app = await newServer();
+    const res = await app.inject({ method: "GET", url: "/api/cases/case_nope" });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error).toBe("case_not_found");
+  });
+
+  it("run-audit 404s for an unknown (never-uploaded) case", async () => {
+    app = await newServer();
+    const res = await app.inject({ method: "POST", url: "/api/cases/case_nope/run-audit" });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error).toBe("case_not_found");
+  });
+
+  it("503s the upload when object storage is not configured", async () => {
+    app = await buildServer({
+      ranker: scriptedRanker,
+      caseRepository: new InMemoryCaseRepository(),
+      blobStore: null,
+    });
+    const { body, contentType } = buildMultipart(demoUploadParts());
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/cases",
+      headers: { "content-type": contentType },
+      payload: body,
+    });
+    expect(res.statusCode).toBe(503);
+    expect(res.json().error).toBe("persistence_not_configured");
+  });
+});

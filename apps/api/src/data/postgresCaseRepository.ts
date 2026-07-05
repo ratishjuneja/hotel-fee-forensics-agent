@@ -2,7 +2,7 @@ import pg from "pg";
 
 import type { AuditReport } from "@feeforensics/shared";
 
-import type { CaseRepository } from "./caseRepository.js";
+import type { CaseRecord, CaseRepository } from "./caseRepository.js";
 
 const { Pool } = pg;
 
@@ -68,6 +68,31 @@ export class PostgresCaseRepository implements CaseRepository {
          updated_at timestamptz NOT NULL DEFAULT now()
        )`,
     );
+    await this.pool.query(
+      `CREATE TABLE IF NOT EXISTS cases (
+         case_id    text PRIMARY KEY,
+         record     jsonb NOT NULL,
+         updated_at timestamptz NOT NULL DEFAULT now()
+       )`,
+    );
+  }
+
+  async saveCase(record: CaseRecord): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO cases (case_id, record, updated_at)
+         VALUES ($1, $2, now())
+       ON CONFLICT (case_id)
+         DO UPDATE SET record = EXCLUDED.record, updated_at = now()`,
+      [record.id, record],
+    );
+  }
+
+  async getCase(caseId: string): Promise<CaseRecord | null> {
+    const result = await this.pool.query<{ record: CaseRecord }>(
+      `SELECT record FROM cases WHERE case_id = $1`,
+      [caseId],
+    );
+    return result.rows[0]?.record ?? null;
   }
 
   async saveReport(caseId: string, report: AuditReport): Promise<void> {
