@@ -25,8 +25,11 @@ export interface DisputeContext {
 const withDefaults = (ctx?: DisputeContext): Required<DisputeContext> => ({
   hotel: ctx?.hotel ?? "the Hotel",
   period: ctx?.period ?? "the audit period",
-  operator: ctx?.operator ?? "the Operator",
-  owner: ctx?.owner ?? "the Owner",
+  // Greeting/signature placeholders the owner fills before sending (or the real
+  // party name when the case carries one). Bracketed so they read as a single
+  // fill-in token, never a doubled "[Operator — the Operator]".
+  operator: ctx?.operator ?? "[Operator]",
+  owner: ctx?.owner ?? "[Owner]",
 });
 
 /**
@@ -60,6 +63,19 @@ export function disputeKind(f: Finding): DisputeKind {
   return "review";
 }
 
+/**
+ * A finding belongs in a dispute only when it is a hard overcharge or an
+ * unsupported charge. A charge the owner ACCEPTED as correct (`approve`) — or one
+ * still parked for a human — is never disputed: it stays out of the total, the
+ * email, and the selectable list. This is the fix for "accept as correct still
+ * shows up in the dispute": accepted charges are excluded here, at the source.
+ */
+export function isDisputable(f: Finding): boolean {
+  return (
+    f.recommendedAction === "dispute" || f.recommendedAction === "request_explanation"
+  );
+}
+
 export function actionLabel(f: Finding): string {
   switch (f.recommendedAction) {
     case "dispute":
@@ -87,12 +103,21 @@ export interface PacketSummary {
 export function summarize(selected: Finding[]): PacketSummary {
   let overcharge = 0;
   let unsupported = 0;
+  let count = 0;
   for (const f of selected) {
-    if (disputeKind(f) === "overcharge") overcharge += f.suspectedImpact;
-    else unsupported += f.suspectedImpact;
+    // Only overcharges and unsupported charges sum into a dispute. An accepted
+    // ("approve") or parked ("human_review") finding contributes nothing — it is
+    // neither counted nor added to the total.
+    if (f.recommendedAction === "dispute") {
+      overcharge += f.suspectedImpact;
+      count += 1;
+    } else if (f.recommendedAction === "request_explanation") {
+      unsupported += f.suspectedImpact;
+      count += 1;
+    }
   }
   return {
-    count: selected.length,
+    count,
     total: overcharge + unsupported,
     overcharge,
     unsupported,
@@ -101,18 +126,20 @@ export function summarize(selected: Finding[]): PacketSummary {
 
 /** Markdown dispute memo for the selected findings. */
 export function buildMemo(selected: Finding[], context?: DisputeContext): string {
-  if (selected.length === 0) {
+  // Only disputable findings make a packet; accepted charges are excluded.
+  const disputed = selected.filter(isDisputable);
+  if (disputed.length === 0) {
     return "_No findings selected — choose at least one item to build a dispute packet._";
   }
   const { hotel, period } = withDefaults(context);
-  const s = summarize(selected);
-  const rows = selected
+  const s = summarize(disputed);
+  const rows = disputed
     .map(
       (f, i) =>
         `| ${i + 1} | ${cellText(f.title)} | ${formatCurrency(f.suspectedImpact)} | ${disputeKind(f)} | ${cellText(shortClause(f))} | ${actionLabel(f)} |`,
     )
     .join("\n");
-  const basis = selected
+  const basis = disputed
     .map((f, i) => `${i + 1}. **${plain(f.title)}** — ${plain(f.explanation)}`)
     .join("\n");
 
@@ -143,8 +170,11 @@ export interface DisputeEmail {
 /** Draft dispute email for the selected findings. */
 export function buildEmail(selected: Finding[], context?: DisputeContext): DisputeEmail {
   const { hotel, period, operator, owner } = withDefaults(context);
-  const s = summarize(selected);
-  const items = selected
+  // Only disputable findings go in the email — an accepted charge is never
+  // asked back.
+  const disputed = selected.filter(isDisputable);
+  const s = summarize(disputed);
+  const items = disputed
     .map(
       (f, i) =>
         `${i + 1}. ${plain(f.title)} — ${formatCurrency(f.suspectedImpact)} (${plain(shortClause(f))}).`,
@@ -153,7 +183,7 @@ export function buildEmail(selected: Finding[], context?: DisputeContext): Dispu
 
   return {
     subject: `${hotel} — ${period} operator fee dispute (${formatCurrency(s.total)})`,
-    body: `Hi [Operator — ${operator}],
+    body: `Hi ${operator},
 
 Following our review of the ${period} operating package, we are raising ${s.count} item${s.count === 1 ? "" : "s"} totaling ${formatCurrency(s.total)} (${formatCurrency(s.overcharge)} overcharge + ${formatCurrency(s.unsupported)} unsupported):
 
@@ -162,7 +192,7 @@ ${items}
 We request a corrected fee calculation (true-up) on the overcharge items and either the written approval or a reversal of any unsupported items. Per the audit-rights clause (HMA §9.2) we'd like to resolve this within the true-up window.
 
 Thank you,
-[Owner — ${owner}]`,
+${owner}`,
   };
 }
 

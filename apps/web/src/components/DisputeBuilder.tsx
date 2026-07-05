@@ -8,6 +8,7 @@ import {
   buildEmail,
   buildPacket,
   disputeKind,
+  isDisputable,
   summarize,
   type DisputeContext,
 } from "@/lib/disputePacket";
@@ -37,13 +38,18 @@ export function DisputeBuilder({
   context?: DisputeContext;
   packetFilename?: string;
 }) {
+  // Only disputable findings are pursuable — a charge the owner accepted as
+  // correct (or one still parked for a human) is never part of a dispute, so it
+  // is not listed, selected, or summed here.
+  const disputable = useMemo(() => findings.filter(isDisputable), [findings]);
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
-    () => new Set(findings.map((f) => f.id)),
+    () => new Set(disputable.map((f) => f.id)),
   );
 
   const chosen = useMemo(
-    () => findings.filter((f) => selectedIds.has(f.id)),
-    [findings, selectedIds],
+    () => disputable.filter((f) => selectedIds.has(f.id)),
+    [disputable, selectedIds],
   );
   const summary = useMemo(() => summarize(chosen), [chosen]);
   const email = useMemo(() => buildEmail(chosen, context), [chosen, context]);
@@ -59,6 +65,22 @@ export function DisputeBuilder({
 
   const none = chosen.length === 0;
 
+  // Nothing to dispute: every fee reconciled or was accepted. Show the honest
+  // end state rather than an empty selector with a $0 total.
+  if (disputable.length === 0) {
+    return (
+      <section>
+        <h2 className="text-lg font-semibold tracking-tight text-foreground">
+          Build the dispute
+        </h2>
+        <Card className="mt-4 p-6 text-sm text-muted">
+          Nothing to dispute — every fee reconciled or was accepted as correct.
+          There is no dispute total and no draft email to send.
+        </Card>
+      </section>
+    );
+  }
+
   return (
     <section>
       <h2 className="text-lg font-semibold tracking-tight text-foreground">
@@ -71,7 +93,7 @@ export function DisputeBuilder({
 
       {/* Finding selector */}
       <div className="mt-4 space-y-2">
-        {findings.map((f) => {
+        {disputable.map((f) => {
           const on = selectedIds.has(f.id);
           const kind = disputeKind(f);
           return (
@@ -120,7 +142,7 @@ export function DisputeBuilder({
       <Card className="mt-4 flex flex-wrap items-center justify-between gap-4 p-4">
         <div>
           <p className="text-sm text-muted">
-            Dispute total · {summary.count} of {findings.length} findings
+            Dispute total · {summary.count} of {disputable.length} findings
           </p>
           <p className="mt-0.5 font-mono text-2xl font-semibold tabular-nums text-danger">
             {formatCurrency(summary.total)}
