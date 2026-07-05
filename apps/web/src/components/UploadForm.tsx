@@ -179,7 +179,9 @@ export function UploadForm() {
           case details + required documents on the left, the optional evidence
           on the right. Collapses to a single column below `lg`. */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="space-y-6">
+        {/* min-w-0 lets each grid column shrink below its content's intrinsic
+            width so long filenames truncate instead of overflowing the track. */}
+        <div className="min-w-0 space-y-6">
           {/* Case label — the statements carry no reporting month, so the owner
               names the case and its audit month here. Both feed the report
               header, memo, and dispute email. */}
@@ -223,7 +225,7 @@ export function UploadForm() {
           </fieldset>
         </div>
 
-        <fieldset className="space-y-3">
+        <fieldset className="min-w-0 space-y-3">
           <legend className="mb-2 text-xs font-semibold uppercase tracking-wider text-subtle">
             Optional: strengthen the evidence checks
           </legend>
