@@ -8,10 +8,10 @@ export { toast } from "sonner";
 
 /** Themed sonner toaster, mounted once in the root layout. */
 export function Toaster() {
-  const { resolved } = useTheme();
+  const { theme } = useTheme();
   return (
     <SonnerToaster
-      theme={resolved}
+      theme={theme}
       position="bottom-right"
       gap={10}
       toastOptions={{
