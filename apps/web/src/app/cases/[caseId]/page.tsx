@@ -13,6 +13,11 @@ import {
 } from "lucide-react";
 import type { CaseStatusResponse } from "@feeforensics/shared";
 import { getCaseStatus } from "@/lib/api";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { Progress } from "@/components/ui/Progress";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { useAutoScroll } from "@/lib/useAutoScroll";
 import { cn } from "@/lib/utils";
 
 const POLL_MS = 1_500;
@@ -20,7 +25,7 @@ const POLL_MS = 1_500;
 /**
  * Parsing screen for an uploaded case: polls GET /api/cases/:id until the async
  * parse job lands, then hands off to the run screen. A failed parse is reported
- * honestly with the per-document warnings — never silently swapped for the demo.
+ * honestly with the per-document warnings — never silently swapped for a demo.
  */
 export default function CaseParsingPage() {
   const { caseId } = useParams<{ caseId: string }>();
@@ -56,129 +61,166 @@ export default function CaseParsingPage() {
   // Give the reader a beat to see "parsed", then move on to the run.
   useEffect(() => {
     if (!ready) return;
-    const t = setTimeout(() => router.push(`/cases/${caseId}/run`), 1_200);
+    const t = setTimeout(() => router.push(`/cases/${caseId}/run`), 1_400);
     return () => clearTimeout(t);
   }, [ready, caseId, router]);
 
+  // Re-center on the outcome (ready / failed) once parsing resolves.
+  const outcomeRef = useAutoScroll<HTMLDivElement>(status?.status, {
+    enabled: ready || failed,
+  });
+
   return (
-    <div className="mx-auto max-w-2xl px-4 py-10">
-      <Link
-        href="/cases/new"
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-700"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        New audit
-      </Link>
+    <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
+      <Button asChild variant="ghost" size="sm" className="-ml-2">
+        <Link href="/cases/new">
+          <ArrowLeft className="h-4 w-4" />
+          New audit
+        </Link>
+      </Button>
 
       <header className="mt-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
             Preparing your case
           </h1>
-          <p className="mt-1 text-sm text-slate-600">
+          <p className="mt-1 text-sm text-muted">
             Documents are stored and parsed before the agent runs — nothing is
             analyzed until every readable document is in.
           </p>
         </div>
-        {ready ? (
-          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700">
-            <CheckCircle2 className="h-4 w-4" />
-            Parsed
-          </span>
-        ) : failed ? (
-          <span className="inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1 text-sm font-medium text-rose-700">
-            <AlertTriangle className="h-4 w-4" />
-            Failed
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-2 rounded-full bg-brand-50 px-3 py-1 text-sm font-medium text-brand-700">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Parsing
-          </span>
-        )}
+        <ParseStatus ready={ready} failed={failed} />
       </header>
 
-      {error && !status && (
-        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          <p className="font-semibold">Could not load this case.</p>
-          <p className="mt-1">{error}</p>
-        </div>
+      {!ready && !failed && !error && (
+        <Progress className="mt-6" label="Parsing documents" />
       )}
 
-      {status && (
-        <ul className="mt-6 space-y-2">
-          {status.parseWarnings.map((doc) => (
-            <li
-              key={doc.role}
-              className={cn(
-                "card flex items-start gap-3 p-4",
-                doc.warnings.length > 0 && "border-amber-200 bg-amber-50/60",
-              )}
-            >
-              <FileText
+      {error && !status && (
+        <Card className="mt-6 border-warning/30 bg-warning-soft/40 p-4">
+          <p className="font-semibold text-foreground">
+            Could not load this case.
+          </p>
+          <p className="mt-1 text-sm text-muted">{error}</p>
+        </Card>
+      )}
+
+      <ul className="mt-6 space-y-2.5">
+        {status?.parseWarnings.map((doc) => {
+          const hasWarnings = doc.warnings.length > 0;
+          return (
+            <li key={doc.role}>
+              <Card
                 className={cn(
-                  "mt-0.5 h-4 w-4 shrink-0",
-                  doc.warnings.length > 0 ? "text-amber-600" : "text-emerald-600",
+                  "flex items-start gap-3 p-4",
+                  hasWarnings && "border-warning/30 bg-warning-soft/30",
                 )}
-              />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-slate-800">
-                  {doc.documentName}
-                </p>
-                {doc.warnings.length > 0 ? (
-                  <ul className="mt-1 space-y-0.5 text-xs text-amber-800">
-                    {doc.warnings.map((w, i) => (
-                      <li key={i}>{w}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-0.5 text-xs text-slate-500">Parsed cleanly.</p>
-                )}
-              </div>
+              >
+                <FileText
+                  className={cn(
+                    "mt-0.5 h-4 w-4 shrink-0",
+                    hasWarnings ? "text-warning-soft-foreground" : "text-success",
+                  )}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-foreground">
+                    {doc.documentName}
+                  </p>
+                  {hasWarnings ? (
+                    <ul className="mt-1 space-y-0.5 text-xs text-warning-soft-foreground">
+                      {doc.warnings.map((w, i) => (
+                        <li key={i}>{w}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-0.5 text-xs text-muted">Parsed cleanly.</p>
+                  )}
+                </div>
+              </Card>
+            </li>
+          );
+        })}
+
+        {status?.status === "parsing" &&
+          status.parseWarnings.length === 0 &&
+          [0, 1].map((i) => (
+            <li key={i}>
+              <Card className="flex items-center gap-3 p-4">
+                <Skeleton className="h-4 w-4 rounded" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-3.5 w-40" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+              </Card>
             </li>
           ))}
-          {status.status === "parsing" && status.parseWarnings.length === 0 && (
-            <li className="flex items-center gap-2 text-sm text-slate-400">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Reading documents…
-            </li>
-          )}
-        </ul>
-      )}
+      </ul>
 
-      {ready && (
-        <div className="mt-6 card flex flex-wrap items-center justify-between gap-4 p-5">
+      {ready && status && (
+        <Card
+          className="mt-6 flex flex-wrap items-center justify-between gap-4 p-5"
+          interactive
+        >
           <div>
-            <p className="font-semibold text-slate-900">
-              {status.hotelName} · {status.auditMonth}
+            <p className="font-semibold text-foreground">
+              {status.hotelName}
+              {status.auditMonth ? ` · ${status.auditMonth}` : ""}
             </p>
-            <p className="mt-0.5 text-sm text-slate-500">
+            <p className="mt-0.5 text-sm text-muted">
               Case parsed — starting the agent run…
             </p>
           </div>
-          <Link
-            href={`/cases/${caseId}/run`}
-            className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-brand-700"
-          >
-            Run the audit
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
+          <Button asChild>
+            <Link href={`/cases/${caseId}/run`}>
+              Run the audit
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        </Card>
       )}
 
       {failed && (
-        <div className="mt-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
-          <p className="font-semibold">These documents could not be parsed.</p>
-          <p className="mt-1">
+        <Card className="mt-6 border-danger/30 bg-danger-soft/40 p-4">
+          <p className="font-semibold text-foreground">
+            These documents could not be parsed.
+          </p>
+          <p className="mt-1 text-sm text-muted">
             The warnings above say what went wrong. Nothing was analyzed — fix
             the files and{" "}
-            <Link href="/cases/new" className="font-semibold underline">
+            <Link href="/cases/new" className="font-semibold text-primary underline underline-offset-2">
               upload again
             </Link>
             .
           </p>
-        </div>
+        </Card>
       )}
+
+      <div ref={outcomeRef} aria-hidden className="h-px" />
     </div>
+  );
+}
+
+function ParseStatus({ ready, failed }: { ready: boolean; failed: boolean }) {
+  if (ready) {
+    return (
+      <span className="inline-flex items-center gap-2 rounded-full bg-success-soft px-3 py-1 text-sm font-medium text-success-soft-foreground">
+        <CheckCircle2 className="h-4 w-4" />
+        Parsed
+      </span>
+    );
+  }
+  if (failed) {
+    return (
+      <span className="inline-flex items-center gap-2 rounded-full bg-danger-soft px-3 py-1 text-sm font-medium text-danger-soft-foreground">
+        <AlertTriangle className="h-4 w-4" />
+        Failed
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full bg-primary-soft px-3 py-1 text-sm font-medium text-primary-soft-foreground">
+      <Loader2 className="h-4 w-4 animate-spin" />
+      Parsing
+    </span>
   );
 }
