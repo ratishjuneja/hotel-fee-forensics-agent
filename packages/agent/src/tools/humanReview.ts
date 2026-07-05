@@ -48,16 +48,35 @@ const questionId = (caseId: string, issueType: IssueType): string =>
 const formatMoney = (n: number): string =>
   `$${Math.abs(Math.round(n)).toLocaleString("en-US")}`;
 
-/** The charge in plain words — the finding title minus its disposition suffix. */
-function subjectOf(finding: Finding): string {
-  const cleaned = finding.title
-    .replace(/\s+(passed through|charged|left in|calculated on).*/i, "")
-    .trim();
-  return cleaned.length > 0 ? cleaned : "the flagged amount";
-}
-
 const isPassThrough = (t: IssueType): boolean =>
   t === "IMPROPER_PASS_THROUGH" || t === "APPROVAL_THRESHOLD_EXCEEDED";
+
+/**
+ * The charge in plain words, taken from the UPLOADED DOCUMENT itself — nothing
+ * hardcoded, so it works for any case an owner uploads. Prefer the exact line
+ * the charge sits on (the parsed CSV row's `lineLabel`, PR-15 provenance), so the
+ * question names whatever that document calls the line. Failing that, recover the
+ * name from the finding title (the support check writes it there when it ran). If
+ * the document carries no label at all, stay neutral — never invent a name.
+ */
+function subjectOf(finding: Finding): string {
+  const lineLabel = finding.citations
+    .map((c) => c.lineLabel?.trim())
+    .find((l): l is string => Boolean(l));
+  if (lineLabel) return lineLabel;
+
+  const fromTitle = finding.title
+    .replace(/\s+(passed through|charged|left in|calculated on).*/i, "")
+    .trim();
+  // Only use the title when it actually names the charge — not the generic
+  // category ("Pass-through expense") or the missing-input placeholder.
+  if (fromTitle && !/^(pass-through expense|calculation input missing)/i.test(fromTitle)) {
+    return fromTitle;
+  }
+
+  const issueType = finding.issueType ?? "NEEDS_REVIEW";
+  return isPassThrough(issueType) ? "this charge" : "this fee";
+}
 
 /** Build the cited question a `human_review` finding asks the owner. */
 function questionFor(caseId: string, finding: Finding): PendingQuestion {

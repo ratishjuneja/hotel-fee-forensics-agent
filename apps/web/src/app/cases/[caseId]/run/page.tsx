@@ -7,10 +7,12 @@ import {
   AlertTriangle,
   ArrowRight,
   CheckCircle2,
+  HelpCircle,
   Loader2,
 } from "lucide-react";
 import type { CaseStatusResponse, RunAuditResponse } from "@feeforensics/shared";
 import { ApiError, getCaseStatus, runAudit } from "@/lib/api";
+import { PendingQuestions } from "@/components/PendingQuestions";
 import { TraceRow } from "@/components/TraceRow";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 
@@ -74,6 +76,7 @@ export default function CaseRunPage() {
   const steps = result?.trace ?? [];
   const shown = steps.slice(0, visible);
   const done = result !== null && visible >= steps.length;
+  const awaiting = result?.status === "awaiting_input";
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
@@ -99,6 +102,11 @@ export default function CaseRunPage() {
           <span className="inline-flex items-center gap-2 rounded-full bg-brand-50 px-3 py-1 text-sm font-medium text-brand-700">
             <Loader2 className="h-4 w-4 animate-spin" />
             Running
+          </span>
+        ) : awaiting ? (
+          <span className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-800">
+            <HelpCircle className="h-4 w-4" />
+            Needs your input
           </span>
         ) : (
           <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700">
@@ -159,7 +167,16 @@ export default function CaseRunPage() {
         </ol>
       )}
 
-      {done && result && (
+      {done && awaiting && result && (
+        <PendingQuestions
+          key={(result.pendingQuestions ?? []).map((q) => q.id).join(",")}
+          caseId={caseId}
+          questions={result.pendingQuestions ?? []}
+          onResolved={setResult}
+        />
+      )}
+
+      {done && result?.status === "completed" && (
         <div className="mt-8 card flex flex-wrap items-center justify-between gap-4 p-5">
           <div>
             <p className="text-sm text-slate-600">Suspected overcharge</p>

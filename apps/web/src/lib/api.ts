@@ -54,6 +54,23 @@ export function getReport(caseId: string = DEMO_CASE_ID): Promise<AuditReport> {
   return request<AuditReport>(`/api/cases/${caseId}/report`);
 }
 
+/**
+ * POST /api/cases/:caseId/answers — answer the human-in-the-loop questions a
+ * paused run raised (question id → chosen option id), then REPLAY the audit with
+ * them merged. Returns the resumed run: `completed` (report finalized) or another
+ * `awaiting_input` if more questions remain.
+ */
+export function answerQuestions(
+  caseId: string,
+  answers: Record<string, string>,
+): Promise<RunAuditResponse> {
+  return request<RunAuditResponse>(`/api/cases/${caseId}/answers`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ answers }),
+  });
+}
+
 /** Upload slots accepted by POST /api/cases (multipart field names). */
 export interface NewCaseUpload {
   hma: File;

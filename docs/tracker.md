@@ -272,6 +272,16 @@ remark-gfm · `@tailwindcss/typography`. Types imported from `@feeforensics/shar
       documents via the new `GET /api/cases/:id/documents` (`lib/caseDocuments.ts` →
       `resolveCitation` registry). Fallback copy fixed to "files were not stored or
       analyzed." Report body shared via `components/ReportView.tsx` (demo + uploaded).
+- [x] **Human-in-the-loop answer form (PR-19)** — when an uploaded run pauses
+      (`status: "awaiting_input"`), the run page renders the agent's cited
+      question(s) with option buttons in the agent's voice ("The agent needs your
+      input to continue — it won't guess"); answering POSTs
+      `POST /api/cases/:id/answers` and the audit **replays** to completion
+      (`components/PendingQuestions.tsx` + `answerQuestions()` in `lib/api.ts`). The
+      demo case never pauses (golden untouched). Backend (PR-17 polish): the
+      pending-question **subject reads the charge's real name from the uploaded
+      document's line label** — data-driven, works for any uploaded case, nothing
+      hardcoded; stays neutral when a line has no label rather than inventing one.
 - [ ] Findings: expandable confidence backed by real data once contract adds it (§8.6)
 - [ ] "Cannot assess — evidence missing" state for checks with no evidence
 - [ ] `error.tsx` + `not-found.tsx` boundaries; loading skeletons

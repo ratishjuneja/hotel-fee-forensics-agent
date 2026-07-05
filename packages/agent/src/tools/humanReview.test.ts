@@ -68,6 +68,24 @@ describe("planHumanReview", () => {
     expect(plan.resolvedFindings[0]!.recommendedAction).toBe("human_review");
   });
 
+  it("names the charge from a citation lineLabel even when the title is generic", () => {
+    const f = finding({
+      issueType: "IMPROPER_PASS_THROUGH",
+      title: "Pass-through expense passed through without verified support", // generic title
+      citations: [
+        {
+          documentId: "doc_operating_statement",
+          documentName: "Monthly Operating Statement",
+          row: 21,
+          lineLabel: "Centralized Services",
+        },
+      ],
+    });
+    const q = planHumanReview(CASE, [f]).questions[0]!;
+    expect(q.subject).toBe("Centralized Services");
+    expect(q.question).toContain("Centralized Services");
+  });
+
   it("offers dispute/accept for a NEEDS_REVIEW finding", () => {
     const f = finding({
       issueType: "NEEDS_REVIEW",
