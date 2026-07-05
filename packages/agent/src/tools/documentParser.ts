@@ -10,9 +10,10 @@
  *
  * PDF text extraction is an INJECTED boundary (`PdfExtractor`) so tests stay
  * deterministic and the tool never fakes a document. The concrete extractor
- * (pdf-parse) is wired in by the caller / upload path; a scanned PDF — pages but
- * no extractable text — is rejected clearly rather than silently yielding empty
- * chunks (no OCR in the MVP).
+ * (pdfjs-dist, optionally wrapped in the apps/api OCR ladder for scanned pages)
+ * is wired in by the caller / upload path. A PDF that yields no extractable text
+ * even after OCR — pages but truly no recoverable text — is rejected clearly
+ * rather than silently yielding empty chunks.
  */
 
 import type { DocumentChunk } from "@feeforensics/shared";
@@ -33,6 +34,11 @@ export interface PdfExtractionResult {
   pageCount: number;
   /** Per-page text, when the extractor provides it (feeds page-level citations). */
   pages?: { page: number; text: string }[];
+  /**
+   * Non-fatal extractor notes surfaced to the caller (e.g. the OCR ladder capping
+   * how many scanned pages it transcribed). Recorded as case parse warnings.
+   */
+  warnings?: string[];
 }
 
 /** Extracts text from a digital PDF. Concrete impl (pdfjs-dist) is injected. */
@@ -50,12 +56,13 @@ export interface ParseDocumentOptions {
   pdfExtractor?: PdfExtractor;
 }
 
-/** Thrown when a PDF has pages but no extractable text (i.e. a scan). */
+/** Thrown when a PDF yields no recoverable text — no text layer AND OCR (if the
+ * injected extractor runs it) also finds nothing (a blank/garbage scan). */
 export class ScannedPdfError extends Error {
   constructor(fileName: string) {
     super(
-      `"${fileName}" looks like a scanned PDF (no extractable text) — OCR is not ` +
-        `supported. Provide a digital PDF or a .txt/.md export.`,
+      `"${fileName}" has no recoverable text — no text layer, and OCR found nothing ` +
+        `(blank or unreadable scan). Provide a clearer scan, a digital PDF, or a .txt/.md export.`,
     );
     this.name = "ScannedPdfError";
   }
