@@ -1,0 +1,19 @@
+section,line_item,amount,usali_layer,note
+OPERATING REVENUE,Rooms,1000000,operating_revenue,SYNTHETIC QA DATA
+OPERATING REVENUE,Food & Beverage,300000,operating_revenue,
+OPERATING REVENUE,Other Operated Departments,50000,operating_revenue,
+OPERATING REVENUE,Miscellaneous Income,50000,operating_revenue,all legitimately in fee base - no HMA 4.3 excluded items this month
+OPERATING REVENUE,Total Operating Revenue,1400000,operating_revenue_total,
+DEPARTMENTAL EXPENSES,Rooms,250000,departmental_expense,
+DEPARTMENTAL EXPENSES,Food & Beverage,200000,departmental_expense,
+DEPARTMENTAL EXPENSES,Other Operated Departments,30000,departmental_expense,
+DEPARTMENTAL EXPENSES,Total Departmental Expenses,480000,departmental_expense_total,
+SUBTOTAL,Total Departmental Profit,920000,departmental_profit,
+UNDISTRIBUTED OPERATING EXPENSES,Administrative & General,100000,undistributed_expense,
+UNDISTRIBUTED OPERATING EXPENSES,Sales & Marketing,80000,undistributed_expense,
+UNDISTRIBUTED OPERATING EXPENSES,Utilities,40000,undistributed_expense,
+UNDISTRIBUTED OPERATING EXPENSES,Total Undistributed Expenses,220000,undistributed_expense_total,
+SUBTOTAL,Gross Operating Profit (GOP),700000,gop,
+MANAGEMENT FEES,Base Management Fee,42000,fee_charged,3.0% of Total Operating Revenue 1400000 = 42000 - charged correctly
+MANAGEMENT FEES,Incentive Management Fee,70000,fee_charged,10% of GOP 700000 = 70000 - charged correctly
+MANAGEMENT FEES,Total Fees Charged,112000,fee_charged_total,
