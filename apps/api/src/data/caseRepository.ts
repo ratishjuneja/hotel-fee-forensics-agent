@@ -26,6 +26,12 @@ export interface CaseRecord {
   parseWarnings: CaseParseWarning[];
   /** The orchestrator input, present once parsing succeeds. */
   assembledInput: RunAuditInput | null;
+  /**
+   * Owner answers to human-in-the-loop questions (PR-17), question id → chosen
+   * option id. Accumulated via POST /api/cases/:id/answers and merged into the
+   * run on replay. Absent until the owner answers at least one question.
+   */
+  humanAnswers?: Record<string, string>;
 }
 
 /**

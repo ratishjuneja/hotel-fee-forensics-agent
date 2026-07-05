@@ -1,11 +1,11 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   runAudit,
   type ChunkRanker,
   type RunAuditInput,
   type RunAuditResult,
 } from "@feeforensics/agent";
-import type { AuditReport } from "@feeforensics/shared";
+import type { AnswerQuestionsRequest, AuditReport } from "@feeforensics/shared";
 import { DEMO_CASE_ID } from "../data/demoCase.js";
 import { loadDemoAuditInput } from "../data/demoInput.js";
 import type { CaseRepository } from "../data/caseRepository.js";
@@ -42,6 +42,12 @@ type AuditRouteResponse = Omit<RunAuditResult, "report">;
  * (`case_demo_hotel_001`) or an uploaded BYO case's assembled input looked up
  * from the store. The resulting report is persisted to Vultr Managed PostgreSQL
  * (via the injected `CaseRepository`) for GET /report.
+ *
+ * Human-in-the-loop (PR-17): when the audit cannot decide a finding on evidence
+ * alone it returns `status: "awaiting_input"` + cited `pendingQuestions` (HTTP
+ * 202) instead of a report. The owner answers via POST /answers, which merges
+ * the answers onto the stored case and REPLAYS the audit (no mid-run state is
+ * serialized). The demo never pauses, so its flow is unchanged.
  */
 export async function auditRoutes(
   app: FastifyInstance,
@@ -52,6 +58,38 @@ export async function auditRoutes(
     message:
       "Vultr persistence is not configured. Set DATABASE_URL (Vultr Managed PostgreSQL, " +
       "see .env.example) — there is no in-memory fallback.",
+  };
+
+  /**
+   * Run the audit for a resolved input and shape the reply: 202 +
+   * pendingQuestions when it pauses for owner input, else 200 with the persisted
+   * report. Shared by run-audit (no answers yet) and /answers (merged answers).
+   */
+  const runAndReply = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    caseId: string,
+    input: RunAuditInput,
+    answers: Record<string, string> | undefined,
+  ): Promise<AuditRouteResponse> => {
+    const { report, ...response } = await runAudit(
+      { ...input, ...(answers ? { humanAnswers: answers } : {}) },
+      { ranker: options.ranker! },
+    );
+    if (response.warnings.length > 0) {
+      request.log.warn(
+        { caseId, warnings: response.warnings },
+        "audit completed with degraded (fallback) steps",
+      );
+    }
+    if (response.status === "awaiting_input") {
+      // Paused for owner input — no report to persist; the client renders the
+      // cited pendingQuestions and POSTs answers to resume.
+      reply.code(202);
+      return response;
+    }
+    if (report) await options.caseRepository!.saveReport(caseId, report);
+    return response;
   };
 
   // POST /api/cases/:caseId/run-audit
@@ -75,8 +113,10 @@ export async function auditRoutes(
       }
 
       // Resolve the run input: the preloaded demo case, or an uploaded case's
-      // assembled input from the store.
+      // assembled input from the store. Any prior owner answers on the case are
+      // merged in, so a re-run of run-audit stays consistent with /answers.
       let input: RunAuditInput;
+      let answers: Record<string, string> | undefined;
       if (caseId === DEMO_CASE_ID) {
         input = loadDemoAuditInput();
       } else {
@@ -101,19 +141,67 @@ export async function auditRoutes(
           });
         }
         input = record.assembledInput;
+        answers = record.humanAnswers;
       }
 
-      const { report, ...response } = await runAudit(input, {
-        ranker: options.ranker,
-      });
-      await options.caseRepository.saveReport(caseId, report);
-      if (response.warnings.length > 0) {
-        request.log.warn(
-          { caseId, warnings: response.warnings },
-          "audit completed with degraded (fallback) steps",
-        );
+      return runAndReply(request, reply, caseId, input, answers);
+    },
+  );
+
+  // POST /api/cases/:caseId/answers — answer human-in-the-loop questions, then
+  // REPLAY the audit with them merged in (no mid-run state is serialized). Only
+  // uploaded cases can pause; the demo never reaches this. Returns 200 (report
+  // now finalized) or 202 (more questions still open).
+  app.post<{ Params: CaseParams; Body: AnswerQuestionsRequest }>(
+    "/api/cases/:caseId/answers",
+    async (request, reply): Promise<AuditRouteResponse | void> => {
+      const { caseId } = request.params;
+      if (options.ranker === null) {
+        return reply.code(503).send({
+          error: "vultr_not_configured",
+          message:
+            "Vultr Serverless Inference is not configured. Set VULTR_INFERENCE_API_KEY, " +
+            "VULTR_INFERENCE_BASE_URL and VULTR_INFERENCE_RETRIEVER_MODEL (see .env.example), then retry.",
+        });
       }
-      return response;
+      if (options.caseRepository === null) {
+        return reply.code(503).send(persistenceUnconfigured);
+      }
+
+      const body = request.body as AnswerQuestionsRequest | undefined;
+      const incoming = body?.answers;
+      if (
+        !incoming ||
+        typeof incoming !== "object" ||
+        Array.isArray(incoming) ||
+        Object.entries(incoming).some(([k, v]) => typeof k !== "string" || typeof v !== "string")
+      ) {
+        return reply.code(400).send({
+          error: "invalid_answers",
+          message: 'Body must be {"answers": { "<questionId>": "<optionId>", ... }} with string values.',
+        });
+      }
+
+      const record = await options.caseRepository.getCase(caseId);
+      if (!record) {
+        return reply.code(404).send({
+          error: "case_not_found",
+          message: "No such case. Upload documents at POST /api/cases first.",
+        });
+      }
+      if (record.status !== "ready" || !record.assembledInput) {
+        return reply.code(422).send({
+          error: "case_not_ready",
+          message: "This case has no runnable audit to answer questions for.",
+        });
+      }
+
+      // Accumulate answers on the case so a later replay (or another answer)
+      // keeps every prior decision.
+      const merged = { ...(record.humanAnswers ?? {}), ...incoming };
+      await options.caseRepository.saveCase({ ...record, humanAnswers: merged });
+
+      return runAndReply(request, reply, caseId, record.assembledInput, merged);
     },
   );
 

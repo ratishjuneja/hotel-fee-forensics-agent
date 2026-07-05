@@ -48,6 +48,12 @@ export interface ReportGeneratorInput {
   findings: Finding[];
   calculation: CalculationResult;
   confidence: ConfidenceScore;
+  /**
+   * Owner answers merged into the run (human-in-the-loop, PR-17), e.g.
+   * "Centralized Services — Owner instruction: No approval on file." Rendered as
+   * a memo section so the record shows which dispositions the owner directed.
+   */
+  ownerInstructions?: string[];
 }
 
 export interface GenerateReportOptions {
@@ -371,6 +377,11 @@ function buildMemo(
           `${clauseRefs(f)} | ${ACTION_LABEL[f.recommendedAction]} |`,
       );
     });
+  }
+
+  if (input.ownerInstructions && input.ownerInstructions.length > 0) {
+    lines.push("", "### Owner instructions");
+    for (const note of input.ownerInstructions) lines.push(`- ${note}`);
   }
 
   lines.push("", "### Calculation breakdown");

@@ -46,6 +46,8 @@ import type {
   RunAuditResponse,
 } from "@feeforensics/shared";
 
+import { planHumanReview } from "./tools/humanReview.js";
+
 import { checkAnomalies, type Anomaly } from "./tools/anomalyChecker.js";
 import { checkSupport, parseSupportPack } from "./tools/caseHistoryRetriever.js";
 import {
@@ -121,6 +123,14 @@ export interface RunAuditInput {
    * email generation and omits `emailDraft` from the response.
    */
   draftEmail?: boolean;
+  /**
+   * Human-in-the-loop answers (PR-17): question id → chosen option id. A finding
+   * that would be `human_review` raises a cited question; an answer here resolves
+   * it to the option's disposition on **replay** (the run is re-run with these
+   * merged in — no mid-run state is serialized). Any unanswered question stops
+   * the run with `status: "awaiting_input"`. The demo has zero such findings.
+   */
+  humanAnswers?: Record<string, string>;
 }
 
 export interface RunAuditDeps {
@@ -143,7 +153,12 @@ export interface RunAuditDeps {
 
 /** The API contract shape plus the full report and the run's warnings. */
 export interface RunAuditResult extends RunAuditResponse {
-  report: AuditReport;
+  /**
+   * The full audit report — present on a completed run, ABSENT when the run
+   * paused for owner input (`status: "awaiting_input"`), since no memo is
+   * finalized while findings are still in question.
+   */
+  report?: AuditReport;
   warnings: string[];
 }
 
@@ -672,13 +687,22 @@ export async function runAudit(
   }
 
   // ---- Step 9 — classify findings + score confidence (TOOL) -------------------
-  const findings = decideFindings({
+  const decided = decideFindings({
     caseId: input.caseId,
     rules,
     calculation,
     anomalies,
     supportChecks,
   });
+
+  // Human-in-the-loop (PR-17): a finding the engine could not resolve on
+  // evidence alone (`human_review`) becomes a cited question. Owner answers
+  // supplied via `input.humanAnswers` resolve their findings here on replay; any
+  // question left unanswered pauses the run below. The demo has none, so this is
+  // a no-op there and the golden run never pauses.
+  const review = planHumanReview(input.caseId, decided, input.humanAnswers ?? {});
+  const findings = review.resolvedFindings;
+
   const confidence = scoreConfidence({
     rules,
     calculation,
@@ -705,6 +729,41 @@ export async function runAudit(
         : `No findings — charged fees reconcile; confidence ${confidence.points}%.`,
   });
 
+  // Answered questions are a HUMAN decision folded back into the run — badge it.
+  if (review.answerNotes.length > 0) {
+    addStep({
+      title: "Apply owner instructions",
+      tool: "human_input",
+      kind: "HUMAN",
+      inputSummary: `${review.answerNotes.length} owner answer(s) merged (replay)`,
+      outputSummary: sanitize(review.answerNotes.join(" ")),
+      evidenceCount: review.answerNotes.length,
+    });
+  }
+
+  // Any unanswered question stops the audit BEFORE the memo — the engine never
+  // asserts a disposition the owner still has to make. The run returns
+  // `awaiting_input` + the cited questions; POST /answers replays with them.
+  if (review.unanswered.length > 0) {
+    warnings.push(
+      `Audit paused — ${review.unanswered.length} owner question(s) need answers ` +
+        "before the memo can be finalized.",
+    );
+    return {
+      caseId: input.caseId,
+      status: "awaiting_input",
+      trace,
+      findings,
+      memo:
+        `Audit paused — awaiting owner input on ${review.unanswered.length} question(s). ` +
+        `Answer via POST /api/cases/${input.caseId}/answers to resume.`,
+      confidence: confidence.confidence,
+      confidenceBreakdown: confidence.breakdown,
+      pendingQuestions: review.unanswered,
+      warnings,
+    };
+  }
+
   // ---- Step 10 — memo + dispute email (LLM prose, deterministic skeleton) -----
   const { report, warnings: reportWarnings } = await generateReport(
     {
@@ -717,6 +776,7 @@ export async function runAudit(
       findings,
       calculation,
       confidence,
+      ...(review.answerNotes.length > 0 ? { ownerInstructions: review.answerNotes } : {}),
     },
     { ...(deps.llm ? { llm: deps.llm } : {}), now },
   );

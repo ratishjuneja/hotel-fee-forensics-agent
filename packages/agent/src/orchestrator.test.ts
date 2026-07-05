@@ -250,11 +250,11 @@ describe("runAudit — golden end-to-end (real data/demo files)", () => {
   it("reproduces the $36,580 ground truth from parsed documents alone", async () => {
     const result = await resultPromise;
     expect(result.status).toBe("completed");
-    expect(result.report.calculationResult.expectedTotalFees).toBe(239620);
-    expect(result.report.calculationResult.chargedTotalFees).toBe(276200);
-    expect(result.report.calculationResult.variance).toBe(36580);
-    expect(result.report.calculationResult.expectedBaseFee).toBe(104220);
-    expect(result.report.calculationResult.expectedIncentiveFee).toBe(135400);
+    expect(result.report!.calculationResult.expectedTotalFees).toBe(239620);
+    expect(result.report!.calculationResult.chargedTotalFees).toBe(276200);
+    expect(result.report!.calculationResult.variance).toBe(36580);
+    expect(result.report!.calculationResult.expectedBaseFee).toBe(104220);
+    expect(result.report!.calculationResult.expectedIncentiveFee).toBe(135400);
   });
 
   it("produces the three expected findings with the right dispositions", async () => {
@@ -347,8 +347,8 @@ describe("runAudit — golden end-to-end (real data/demo files)", () => {
     expect(result.emailDraft!.subject).toContain("The Harborline Hotel");
     expect(result.emailDraft!.subject).toContain("$36,580");
     // The scripted prose used only context amounts, so the number guard kept it.
-    expect(result.report.executiveSummary).toContain("$36,580");
-    expect(result.report.executiveSummary).not.toContain("reconcile to the management agreement");
+    expect(result.report!.executiveSummary).toContain("$36,580");
+    expect(result.report!.executiveSummary).not.toContain("reconcile to the management agreement");
   });
 
   it("completes the golden path with no warnings", async () => {
@@ -453,7 +453,7 @@ describe("runAudit — stable months (no anomaly, no re-retrieval loop)", () => 
     const result = await resultPromise;
     expect(result.status).toBe("completed");
     expect(result.findings).toEqual([]);
-    expect(result.report.calculationResult.variance).toBe(0);
+    expect(result.report!.calculationResult.variance).toBe(0);
     expect(result.trace).toHaveLength(8);
     expect(result.trace.map((s) => s.stepNumber)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     expect(result.trace.map((s) => s.tool)).toEqual([
@@ -537,5 +537,75 @@ describe("runAudit — all model transports failing mid-run", () => {
     expect(result.emailDraft!.body).toContain("Meridian Hotel Management");
     expect(result.warnings.length).toBeGreaterThanOrEqual(3);
     expect(result.trace.filter((s) => s.status === "warning").length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// --- Human-in-the-loop: an unverifiable finding pauses, then replays ------------
+// Harborline MINUS the support pack: the centralized-services jump still flags,
+// but with no evidence to verify it, F3 becomes `human_review` — so the run must
+// stop and ask the owner instead of asserting a disposition. (The full demo,
+// which HAS the support pack, never reaches here — the golden run does not pause.)
+
+describe("runAudit — human-in-the-loop (unverifiable finding pauses the run)", () => {
+  const ranker = async (query: string, documents: string[]) => {
+    const terms = query.toLowerCase().split(/\W+/).filter((t) => t.length > 2);
+    return documents
+      .map((doc, index) => ({
+        index,
+        score: terms.filter((t) => doc.toLowerCase().includes(t)).length,
+      }))
+      .sort((a, b) => b.score - a.score);
+  };
+
+  const noSupport = (): RunAuditInput => {
+    const input = harborlineInput();
+    const { supportPack: _dropped, ...documents } = input.documents;
+    return { ...input, documents };
+  };
+
+  it("stops with awaiting_input + a cited question, no memo asserted", async () => {
+    const result = await runAudit(noSupport(), { ranker, now });
+    expect(result.status).toBe("awaiting_input");
+    expect(result.report).toBeUndefined();
+    expect(result.pendingQuestions).toHaveLength(1);
+    const q = result.pendingQuestions![0]!;
+    expect(q.issueType).toBe("IMPROPER_PASS_THROUGH");
+    expect(q.citations.length).toBeGreaterThan(0); // never uncited
+    expect(q.options).toHaveLength(2);
+    expect(result.findings.some((f) => f.recommendedAction === "human_review")).toBe(true);
+    expect(result.memo).toMatch(/awaiting owner input/i);
+    expect(result.trace.some((s) => s.kind === "HUMAN")).toBe(false); // nothing answered yet
+  });
+
+  it("completes on replay when answered — HUMAN trace step + memo owner instruction", async () => {
+    const first = await runAudit(noSupport(), { ranker, now });
+    const qid = first.pendingQuestions![0]!.id;
+    const result = await runAudit(
+      { ...noSupport(), humanAnswers: { [qid]: "not_authorized" } },
+      { ranker, now },
+    );
+    expect(result.status).toBe("completed");
+    expect(result.pendingQuestions).toBeUndefined();
+    expect(result.report).toBeDefined();
+    const resolved = result.findings.find((f) => f.issueType === "IMPROPER_PASS_THROUGH")!;
+    expect(resolved.recommendedAction).toBe("request_explanation");
+    expect(result.trace.some((s) => s.kind === "HUMAN" && s.tool === "human_input")).toBe(true);
+    expect(result.memo).toContain("Owner instruction");
+    // not_authorized == the demo's F3 disposition, so the total still foots to $36,580.
+    expect(result.report!.totalSuspectedOvercharge).toBe(36580);
+  });
+
+  it("approving the charge excludes it from the identified total", async () => {
+    const first = await runAudit(noSupport(), { ranker, now });
+    const qid = first.pendingQuestions![0]!.id;
+    const result = await runAudit(
+      { ...noSupport(), humanAnswers: { [qid]: "authorized" } },
+      { ranker, now },
+    );
+    expect(result.status).toBe("completed");
+    const resolved = result.findings.find((f) => f.issueType === "IMPROPER_PASS_THROUGH")!;
+    expect(resolved.recommendedAction).toBe("approve");
+    // Only dispute + request_explanation count toward the identified total.
+    expect(result.report!.totalSuspectedOvercharge).toBe(1980 + 6600);
   });
 });

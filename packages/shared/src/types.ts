@@ -57,7 +57,13 @@ export interface DocumentChunk {
 // Case
 // ---------------------------------------------------------------------------
 
-export type CaseStatus = "created" | "running" | "completed" | "failed";
+export type CaseStatus =
+  | "created"
+  | "running"
+  | "completed"
+  | "failed"
+  /** The audit stopped to ask the owner a cited question it cannot decide alone. */
+  | "awaiting_input";
 
 export interface Case {
   id: string;
@@ -251,6 +257,41 @@ export interface ConfidenceComponent {
 }
 
 // ---------------------------------------------------------------------------
+// Human-in-the-loop (a cited question the agent cannot decide alone)
+// ---------------------------------------------------------------------------
+
+/** One answerable choice for a {@link PendingQuestion}, with its consequence. */
+export interface PendingQuestionOption {
+  /** Stable option id the owner sends back (e.g. "authorized"). */
+  id: string;
+  label: string;
+  /** What choosing this option does to the finding/dispute total. */
+  consequence: string;
+  /** The disposition the answered finding takes when this option is chosen. */
+  resultingAction: RecommendedAction;
+}
+
+/**
+ * A cited question the audit stops on rather than guessing — a finding that
+ * would otherwise be `human_review`. The owner's answer (option id) is merged
+ * back via replay so the run can complete. Deterministic and stable: the same
+ * inputs always produce the same question `id`, so an answer keeps resolving it.
+ */
+export interface PendingQuestion {
+  /** Stable id, derived from the finding's issue type (survives replay). */
+  id: string;
+  issueType: IssueType;
+  /** The charge/subject in plain words, e.g. "Centralized Services". */
+  subject: string;
+  question: string;
+  /** What happens while the question is unanswered. */
+  consequence: string;
+  /** The clause + line evidence behind the question (never uncited). */
+  citations: Citation[];
+  options: PendingQuestionOption[];
+}
+
+// ---------------------------------------------------------------------------
 // Agent trace
 // ---------------------------------------------------------------------------
 
@@ -261,10 +302,16 @@ export type AgentTool =
   | "fee_calculator"
   | "anomaly_checker"
   | "decision_engine"
-  | "report_generator";
+  | "report_generator"
+  /** Owner answers merged back into the run (human-in-the-loop). */
+  | "human_input";
 
-/** Whether a trace step is model reasoning or deterministic code. */
-export type TraceStepKind = "LLM" | "TOOL";
+/**
+ * Whether a trace step is model reasoning (LLM), deterministic code (TOOL), or a
+ * human decision merged into the run (HUMAN — the owner answering a question the
+ * agent could not decide alone).
+ */
+export type TraceStepKind = "LLM" | "TOOL" | "HUMAN";
 
 export type TraceStepStatus = "completed" | "warning" | "failed";
 
@@ -363,4 +410,15 @@ export interface RunAuditResponse {
   emailDraft?: DisputeEmail;
   confidence: number;
   confidenceBreakdown?: ConfidenceComponent[];
+  /**
+   * Present (with `status: "awaiting_input"`) when the audit stopped to ask the
+   * owner cited questions it cannot decide alone. Answer them via
+   * POST /api/cases/:caseId/answers to resume (replay). Absent on a completed run.
+   */
+  pendingQuestions?: PendingQuestion[];
+}
+
+/** Request body for POST /api/cases/:caseId/answers (owner id → chosen option id). */
+export interface AnswerQuestionsRequest {
+  answers: Record<string, string>;
 }
