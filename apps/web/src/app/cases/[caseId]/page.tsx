@@ -175,10 +175,6 @@ export default function CaseParsingPage() {
             <Link href="/cases/new" className="font-semibold underline">
               upload again
             </Link>
-            , or explore the{" "}
-            <Link href="/cases/demo" className="font-semibold underline">
-              preloaded demo case
-            </Link>
             .
           </p>
         </div>

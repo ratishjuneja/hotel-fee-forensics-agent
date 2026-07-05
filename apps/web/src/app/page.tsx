@@ -1,6 +1,5 @@
 import Link from "next/link";
 import {
-  ArrowRight,
   Calculator,
   FileSearch,
   Quote,
@@ -44,28 +43,23 @@ export default function LandingPage() {
             <span className="text-brand-600"> We rerun the math.</span>
           </h1>
           <p className="mt-5 max-w-xl text-lg text-slate-600">
-            FeeForensics investigates a hotel management agreement and monthly
-            operating package, finds fee leakage, and generates a cited,
-            dispute-ready audit memo — with a visible agent trace.
+            Upload your hotel management agreement and monthly operating package.
+            FeeForensics extracts the fee rules, recomputes every fee, finds the
+            leakage, and generates a cited, dispute-ready audit memo — with a
+            visible agent trace over your own documents.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link
-              href="/cases/demo"
+              href="/cases/new"
               className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-brand-700"
             >
-              Run Demo Audit
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link
-              href="/cases/new"
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-5 py-3 font-medium text-slate-700 transition hover:border-brand-300 hover:text-brand-700"
-            >
               <Upload className="h-4 w-4" />
-              Upload Documents
+              Upload documents &amp; run audit
             </Link>
           </div>
           <p className="mt-4 text-xs text-slate-500">
-            Built with Vultr Serverless Inference · Preloaded synthetic case
+            Built with Vultr Serverless Inference · Every result is computed from
+            the documents you upload
           </p>
         </div>
 
