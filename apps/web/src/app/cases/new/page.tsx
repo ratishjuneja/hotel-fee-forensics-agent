@@ -34,12 +34,8 @@ export default function NewCasePage() {
 
       <p className="mt-8 rounded-lg bg-slate-50 p-3 text-xs text-slate-500">
         Uploads are stored in Vultr Object Storage and parsed into a new case.
-        Demo note: all sample documents are <strong>synthetic</strong> — or skip
-        the upload and explore the preloaded{" "}
-        <Link href="/cases/demo" className="text-brand-600 hover:underline">
-          Harborline demo case
-        </Link>
-        .
+        Every finding, number, and citation on the report is computed from the
+        documents you upload — nothing is pre-filled.
       </p>
     </div>
   );

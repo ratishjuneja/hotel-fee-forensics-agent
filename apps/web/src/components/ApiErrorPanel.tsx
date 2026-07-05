@@ -21,10 +21,10 @@ export function ApiErrorPanel({ message }: { message: string }) {
             <code className="font-mono text-xs">http://localhost:4000</code>).
           </p>
           <Link
-            href="/cases/demo"
+            href="/"
             className="mt-3 inline-block text-sm font-semibold text-amber-900 underline"
           >
-            Retry
+            Back to home
           </Link>
         </div>
       </div>

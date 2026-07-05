@@ -2,7 +2,6 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import {
   ArrowRight,
   FileText,
@@ -182,17 +181,9 @@ export function UploadForm() {
             <div className="text-sm text-amber-900">
               <p className="font-semibold">The upload could not be completed.</p>
               <p className="mt-1 text-amber-800">
-                {failure} Your files were not stored or analyzed. You can retry,
-                or explore the full agent run on the preloaded synthetic case
-                (The Harborline Hotel).
+                {failure} Your files were not stored or analyzed — nothing was
+                audited. Check the documents and try the upload again.
               </p>
-              <Link
-                href="/cases/demo/run"
-                className="mt-3 inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
-              >
-                Run the Harborline demo audit
-                <ArrowRight className="h-4 w-4" />
-              </Link>
             </div>
           </div>
         </div>
