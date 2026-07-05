@@ -302,6 +302,67 @@ describe("generateReport — clean audit", () => {
   });
 });
 
+// --- Accept-as-correct: an approved finding is never disputed ----------------------
+
+describe("generateReport — accepted (approve) findings excluded from the dispute", () => {
+  const noReviewConfidence = (fs: typeof findings) =>
+    scoreConfidence({
+      rules: harborlineRules,
+      calculation,
+      findings: fs,
+      inputsPresent: { statement: true, revenueBreakout: true, priorMonth: true },
+      anomalyCheckRan: true,
+    });
+
+  it("an all-accepted run reads as no dispute — $0, no 'Send ,', no empty citation row", async () => {
+    // The owner accepted the only escalated charge as correct. Nothing is owed,
+    // nothing is sent. `findings[2]` (the $28,000 pass-through) carries citations
+    // but is approved, so it must not drive a dispute; give it a citation-free
+    // twin too to prove the citation trail skips empty rows.
+    const accepted: typeof findings = [
+      { ...findings[2]!, recommendedAction: "approve", citations: [] },
+    ];
+    const { report } = await generateReport(
+      { ...harborlineInput, findings: accepted, confidence: noReviewConfidence(accepted) },
+      { now: () => NOW },
+    );
+
+    expect(report.totalSuspectedOvercharge).toBe(0);
+    expect(report.memoMarkdown.toLowerCase()).toContain("no fee issues identified");
+    // The "Send , …" blank-artifact bug: no dispute → an explicit no-action line.
+    expect(report.memoMarkdown).not.toMatch(/Send\s+,/);
+    expect(report.memoMarkdown).toContain("No action required");
+    // The accepted charge still shows in the table, marked no-action.
+    expect(report.memoMarkdown).toContain("No action");
+    // A finding with zero citations must not emit an empty "F1 —" trail row.
+    expect(report.memoMarkdown).not.toMatch(/F1 —[^\n]*:\*\*\s*$/m);
+    // No dispute → the email is the no-issues note, not a $28,000 demand.
+    expect(report.disputeEmail.subject.toLowerCase()).toContain("no fee issues");
+    expect(report.disputeEmail.body).not.toContain("$28,000");
+    expect(report.disputeEmail.body.toLowerCase()).toContain("no action");
+  });
+
+  it("a mixed run disputes only the unaccepted finding; the accepted one is excluded from totals + email", async () => {
+    // F1 stays disputed ($1,980); the $28,000 pass-through is accepted.
+    const mixed: typeof findings = [
+      findings[0]!,
+      { ...findings[2]!, recommendedAction: "approve" },
+    ];
+    const { report } = await generateReport(
+      { ...harborlineInput, findings: mixed, confidence: noReviewConfidence(mixed) },
+      { now: () => NOW },
+    );
+
+    // Only the disputed $1,980 counts; the accepted $28,000 is excluded.
+    expect(report.totalSuspectedOvercharge).toBe(1980);
+    expect(report.disputeEmail.body).toContain("$1,980");
+    expect(report.disputeEmail.body).not.toContain("$28,000");
+    expect(report.disputeEmail.subject).toContain("$1,980");
+    // The accepted charge is still recorded in the findings table (no action).
+    expect(report.memoMarkdown).toContain("No action");
+  });
+});
+
 // --- No generation model at all (VultronRetriever-only pipeline) -------------------
 
 describe("generateReport — no LLM wired (deterministic prose is primary, not a fallback)", () => {

@@ -71,6 +71,13 @@ export interface NewCaseUpload {
   supportPack?: File;
   supplementary?: File;
   ownerNotes?: string;
+  /**
+   * Case label fields. The statements/HMA carry no reporting month, so the case
+   * name and audit month come from the owner here; when omitted the API falls
+   * back to a generic name / the current month.
+   */
+  hotelName?: string;
+  auditMonth?: string;
   /** Generate the draft dispute email (backend default: true). */
   draftEmail: boolean;
 }
@@ -96,6 +103,8 @@ export function createCase(
     form.append("supplementary", upload.supplementary, upload.supplementary.name);
   }
   if (upload.ownerNotes?.trim()) form.append("ownerNotes", upload.ownerNotes.trim());
+  if (upload.hotelName?.trim()) form.append("hotelName", upload.hotelName.trim());
+  if (upload.auditMonth?.trim()) form.append("auditMonth", upload.auditMonth.trim());
   form.append("draftEmail", String(upload.draftEmail));
   return request<{ caseId: string; status: "parsing" }>("/api/cases", {
     method: "POST",

@@ -745,4 +745,40 @@ describe("runAudit — §5.1 within-threshold centralized charge auto-clears", (
       result.findings.some((f) => f.issueType === "IMPROPER_PASS_THROUGH"),
     ).toBe(false);
   });
+
+  it("August accepted-as-correct: replay with 'accept' clears the dispute to $0 and completes", async () => {
+    const { llm } = scriptedLlm();
+    const base = centralizedInput({
+      caseId: "case_august_hitl",
+      hma: demoHma,
+      statementCsv: cleanStatementCsv({ centralized: 8800, utilities: false }),
+    });
+
+    // First pass pauses on the incentive/GOP question; read its id from the run.
+    const paused = await runAudit(base, { llm, now });
+    const questionId = paused.pendingQuestions![0]!.id;
+
+    // The owner accepts the escalated charge as correct — it must leave the
+    // dispute entirely, not reappear as an "unsupported" line (the accept-as-
+    // correct bug).
+    const replay = await runAudit(
+      { ...base, humanAnswers: { [questionId]: "accept" } },
+      { llm, now },
+    );
+
+    expect(replay.status).toBe("completed");
+    expect(replay.pendingQuestions).toBeUndefined();
+    // Excluded from the dispute total…
+    expect(replay.report!.totalSuspectedOvercharge).toBe(0);
+    // …nothing is disputable, and the accepted finding is recorded as approved.
+    expect(
+      replay.findings.some(
+        (f) =>
+          f.recommendedAction === "dispute" ||
+          f.recommendedAction === "request_explanation",
+      ),
+    ).toBe(false);
+    expect(replay.findings.some((f) => f.recommendedAction === "approve")).toBe(true);
+    expect(replay.memo.toLowerCase()).toContain("no fee issues identified");
+  });
 });

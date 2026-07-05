@@ -78,6 +78,8 @@ function fmtSize(bytes: number): string {
 export function UploadForm() {
   const router = useRouter();
   const [files, setFiles] = useState<Partial<Record<SlotKey, File>>>({});
+  const [hotelName, setHotelName] = useState("");
+  const [auditMonth, setAuditMonth] = useState("");
   const [ownerNotes, setOwnerNotes] = useState("");
   const [draftEmail, setDraftEmail] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -104,6 +106,8 @@ export function UploadForm() {
         ...(files.statementPrior ? { statementPrior: files.statementPrior } : {}),
         ...(files.supportPack ? { supportPack: files.supportPack } : {}),
         ...(files.supplementary ? { supplementary: files.supplementary } : {}),
+        ...(hotelName.trim() ? { hotelName } : {}),
+        ...(auditMonth.trim() ? { auditMonth } : {}),
         ...(ownerNotes.trim() ? { ownerNotes } : {}),
         draftEmail,
       });
@@ -119,8 +123,39 @@ export function UploadForm() {
     }
   };
 
+  const fieldClass =
+    "w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-foreground shadow-xs transition-colors placeholder:text-subtle focus-visible:border-primary";
+
   return (
     <div>
+      {/* Case label — the statements carry no reporting month, so the owner
+          names the case and its audit month here. Both feed the report header,
+          memo, and dispute email. */}
+      <div className="mb-6 grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor="hotelName">Hotel name</Label>
+          <input
+            id="hotelName"
+            type="text"
+            value={hotelName}
+            onChange={(e) => setHotelName(e.target.value)}
+            placeholder="e.g. The Cedarcrest Inn"
+            className={fieldClass}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="auditMonth">Audit month</Label>
+          <input
+            id="auditMonth"
+            type="text"
+            value={auditMonth}
+            onChange={(e) => setAuditMonth(e.target.value)}
+            placeholder="e.g. September 2026"
+            className={fieldClass}
+          />
+        </div>
+      </div>
+
       <fieldset className="space-y-3">
         <legend className="mb-2 text-xs font-semibold uppercase tracking-wider text-subtle">
           Required

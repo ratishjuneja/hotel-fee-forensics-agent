@@ -98,6 +98,16 @@ const ACTION_LABEL: Record<RecommendedAction, string> = {
   approve: "No action",
 };
 
+/**
+ * A finding belongs in a dispute only when it is a hard overcharge or an
+ * unsupported charge. A finding the owner ACCEPTED as correct (`approve`) — or
+ * one still parked for a human — is never disputed: it stays out of the dispute
+ * total, the dispute email, and the "send a notice" recommendation. It still
+ * shows in the findings table, marked valid / no action.
+ */
+const isDisputable = (f: Finding): boolean =>
+  f.recommendedAction === "dispute" || f.recommendedAction === "request_explanation";
+
 /** "HMA §4.1/§4.3" from a finding's citations; "—" when none carry a §-ref. */
 function clauseRefs(finding: Finding): string {
   const refs = [
@@ -277,7 +287,8 @@ function fallbackSummary(
   totals: Totals,
   window: AuditWindow | null,
 ): string {
-  if (input.findings.length === 0) {
+  const disputable = input.findings.filter(isDisputable);
+  if (disputable.length === 0) {
     return (
       `The operator's ${input.auditMonth} fee charges reconcile to the management ` +
       `agreement — no fee issues identified.`
@@ -290,7 +301,7 @@ function fallbackSummary(
     : "";
   return (
     `The operator's ${input.auditMonth} fee charges show ${formatMoney(totals.identified)} ` +
-    `of identified fee issues across ${input.findings.length} finding(s) — ` +
+    `of identified fee issues across ${disputable.length} finding(s) — ` +
     `${formatMoney(totals.overcharge)} in hard overcharges and ` +
     `${formatMoney(totals.unsupported)} unsupported pending owner approval.` +
     windowClause
@@ -304,8 +315,9 @@ function fallbackEmailBody(
 ): string {
   const operator = input.operatorName ?? "[Operator]";
   const owner = input.ownerName ?? "[Owner]";
+  const disputable = input.findings.filter(isDisputable);
 
-  if (input.findings.length === 0) {
+  if (disputable.length === 0) {
     return (
       `Hi ${operator},\n\nWe completed our review of the ${input.auditMonth} operating ` +
       `package; the fees charged reconcile to the management agreement and no action ` +
@@ -313,7 +325,7 @@ function fallbackEmailBody(
     );
   }
 
-  const items = input.findings
+  const items = disputable
     .map(
       (f, i) =>
         `${i + 1}. ${f.title}: ${formatMoney(Math.abs(f.suspectedImpact))} ` +
@@ -349,11 +361,12 @@ function buildMemo(
   window: AuditWindow | null,
   executiveSummary: string,
 ): string {
+  const disputable = input.findings.filter(isDisputable);
   const lines: string[] = [];
   lines.push(`## Fee Audit Memo — ${input.hotelName} (${input.auditMonth})`);
   lines.push("");
 
-  if (input.findings.length === 0) {
+  if (disputable.length === 0) {
     lines.push(`**No fee issues identified · Confidence: ${input.confidence.points}%**`);
   } else {
     lines.push(
@@ -391,9 +404,13 @@ function buildMemo(
       `incentive ${formatMoney(input.calculation.expectedIncentiveFee)})`,
   );
   lines.push(`- Charged fees: **${formatMoney(input.calculation.chargedTotalFees)}**`);
+  const varianceIsZero = Math.abs(input.calculation.variance) < 0.01;
   lines.push(
-    input.findings.length === 0
-      ? `- Variance: **${formatMoney(input.calculation.variance)}** — charged fees reconcile`
+    disputable.length === 0
+      ? varianceIsZero
+        ? `- Variance: **${formatMoney(input.calculation.variance)}** — charged fees reconcile`
+        : `- Variance: **${formatMoney(input.calculation.variance)}** — reviewed; ` +
+          `no amount in dispute (charges accepted as correct)`
       : `- Variance: **${formatMoney(input.calculation.variance)}** — ` +
           `${formatMoney(totals.overcharge)} overcharge + ` +
           `${formatMoney(totals.unsupported)} unsupported` +
@@ -407,9 +424,14 @@ function buildMemo(
     lines.push(`| ${c.label} | +${c.points}/${c.max} | ${c.explanation} |`);
   }
 
-  if (input.findings.length > 0) {
+  // Only findings that actually carry a citation get a trail row — an
+  // accepted/needs-review finding may have none, and an empty "F1 —" row is
+  // noise, not evidence.
+  const citedFindings = input.findings.filter((f) => f.citations.length > 0);
+  if (citedFindings.length > 0) {
     lines.push("", "### Citation trail");
     input.findings.forEach((f, i) => {
+      if (f.citations.length === 0) return;
       // Each citation renders to an exact location — clause + document/page, or
       // financial line + source CSV row — so every claim is verifiable.
       const labels = [...new Set(f.citations.map(formatCitation))];
@@ -418,27 +440,21 @@ function buildMemo(
   }
 
   lines.push("", "### Recommended next action");
-  if (input.findings.length === 0) {
-    lines.push("No action required — charged fees reconcile to the agreement.");
+  // Only disputable findings drive an action; an all-accepted (or empty) run
+  // needs nothing sent — never "Send , …" with a blank artifact.
+  const parts: string[] = [];
+  if (totals.overcharge > 0) parts.push("a dispute notice requesting a true-up on the disputed findings");
+  if (totals.unsupported > 0) {
+    parts.push("either written approval or reversal of the unsupported charge(s)");
+  }
+  if (parts.length === 0) {
+    lines.push("No action required — no charges are in dispute.");
   } else {
-    const parts: string[] = [];
-    if (totals.overcharge > 0) parts.push("a dispute notice requesting a true-up on the disputed findings");
-    if (totals.unsupported > 0) {
-      parts.push("either written approval or reversal of the unsupported charge(s)");
-    }
-    const reviewCount = input.findings.filter(
-      (f) => f.recommendedAction === "human_review",
-    ).length;
     const windowClause = window
       ? `, citing the audit-rights clause${window.clauseRef ? ` (${window.clauseRef})` : ""} ` +
         `before the ${window.label} audit window closes`
       : "";
-    lines.push(
-      `Send ${parts.join(" and ")}${windowClause}.` +
-        (reviewCount > 0
-          ? ` Route ${reviewCount} finding(s) marked "needs review" to a human before including them.`
-          : ""),
-    );
+    lines.push(`Send ${parts.join(" and ")}${windowClause}.`);
   }
 
   lines.push("");
@@ -500,12 +516,12 @@ export async function generateReport(
     }
   }
 
-  const subject =
-    input.findings.length === 0
-      ? `${input.hotelName} — ${input.auditMonth} operator fee review (no fee issues identified)`
-      : `${input.hotelName} — ${input.auditMonth} operator fee review ` +
-        `(${formatMoney(totals.identified)}: ${formatMoney(totals.overcharge)} overcharge + ` +
-        `${formatMoney(totals.unsupported)} unsupported)`;
+  const hasDispute = input.findings.some(isDisputable);
+  const subject = !hasDispute
+    ? `${input.hotelName} — ${input.auditMonth} operator fee review (no fee issues identified)`
+    : `${input.hotelName} — ${input.auditMonth} operator fee review ` +
+      `(${formatMoney(totals.identified)}: ${formatMoney(totals.overcharge)} overcharge + ` +
+      `${formatMoney(totals.unsupported)} unsupported)`;
 
   const now = options.now ?? (() => new Date().toISOString());
 
