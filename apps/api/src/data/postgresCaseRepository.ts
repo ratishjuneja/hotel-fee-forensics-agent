@@ -7,6 +7,41 @@ import type { CaseRepository } from "./caseRepository.js";
 const { Pool } = pg;
 
 /**
+ * Derive node-postgres Pool config from a connection URL.
+ *
+ * Vultr Managed PostgreSQL serves TLS with a per-cluster **self-signed CA** that
+ * is not in the system trust store. Recent node-postgres treats
+ * `sslmode=require` *in the connection string* as full chain verification (and
+ * it overrides an explicit `ssl` option), so a `sslmode=require` URL throws
+ * `SELF_SIGNED_CERT_IN_CHAIN` at connect time. We therefore strip `sslmode` from
+ * the URL and drive TLS purely through the `ssl` option: the connection stays
+ * encrypted, but chain verification is relaxed. (A future hardening could pass
+ * the cluster CA via `ssl.ca` for verify-full.)
+ */
+export function poolConfigFromConnectionString(connectionString: string): pg.PoolConfig {
+  const sslModes = /^(require|prefer|verify-ca|verify-full)$/i;
+  try {
+    const url = new URL(connectionString);
+    const mode = url.searchParams.get("sslmode");
+    const requiresSsl = mode != null && sslModes.test(mode);
+    if (url.searchParams.has("sslmode")) {
+      url.searchParams.delete("sslmode");
+    }
+    return {
+      connectionString: url.toString(),
+      ...(requiresSsl ? { ssl: { rejectUnauthorized: false } } : {}),
+    };
+  } catch {
+    // Not a parseable URL — leave it as-is and detect the mode textually.
+    const requiresSsl = /sslmode=(require|prefer|verify-ca|verify-full)/i.test(connectionString);
+    return {
+      connectionString,
+      ...(requiresSsl ? { ssl: { rejectUnauthorized: false } } : {}),
+    };
+  }
+}
+
+/**
  * `CaseRepository` backed by **Vultr Managed PostgreSQL**.
  *
  * Reports are stored as `jsonb` keyed by case id (node-postgres serializes a
@@ -22,15 +57,7 @@ export class PostgresCaseRepository implements CaseRepository {
   private readonly pool: pg.Pool;
 
   constructor(connectionString: string) {
-    // Vultr Managed PostgreSQL requires TLS. When the URL asks for it, enable
-    // ssl explicitly — the managed CA is not in the system trust store, so
-    // verification is relaxed (the connection is still encrypted). Local dev
-    // without sslmode gets a plain connection.
-    const requiresSsl = /sslmode=(require|verify-ca|verify-full)/i.test(connectionString);
-    this.pool = new Pool({
-      connectionString,
-      ...(requiresSsl ? { ssl: { rejectUnauthorized: false } } : {}),
-    });
+    this.pool = new Pool(poolConfigFromConnectionString(connectionString));
   }
 
   async init(): Promise<void> {
