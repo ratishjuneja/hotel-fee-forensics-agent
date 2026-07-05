@@ -3,8 +3,10 @@ import Fastify from "fastify";
 import type { FastifyError } from "fastify";
 import cors from "@fastify/cors";
 import type { ChunkRanker } from "@feeforensics/agent";
-import { corsOrigins, env, isRankerConfigured } from "./config/env.js";
+import { corsOrigins, env, isPersistenceConfigured, isRankerConfigured } from "./config/env.js";
+import type { CaseRepository } from "./data/caseRepository.js";
 import { createAuditRanker } from "./lib/llm.js";
+import { createCaseRepository } from "./lib/persistence.js";
 import { createRateLimiter } from "./lib/rateLimit.js";
 import { healthRoutes } from "./routes/health.js";
 import { demoCaseRoutes } from "./routes/demoCase.js";
@@ -18,6 +20,13 @@ export interface BuildServerOptions {
    * are needed.
    */
   ranker?: ChunkRanker | null;
+  /**
+   * Vultr-backed persistence (Managed PostgreSQL). Omit for the default (real
+   * repository when DATABASE_URL is set, otherwise null → audit routes 503).
+   * Tests inject an in-memory fake here so no live database is needed. There is
+   * no in-memory production default (see docs/Rules.md).
+   */
+  caseRepository?: CaseRepository | null;
 }
 
 export async function buildServer(options: BuildServerOptions = {}) {
@@ -56,10 +65,22 @@ export async function buildServer(options: BuildServerOptions = {}) {
     }
   });
 
+  const caseRepository =
+    options.caseRepository !== undefined ? options.caseRepository : createCaseRepository();
+  // Run the idempotent schema migration once at boot, and release the pool on
+  // shutdown so tests (and SIGTERM) don't leak connections.
+  if (caseRepository) {
+    await caseRepository.init();
+    app.addHook("onClose", async () => {
+      await caseRepository.close();
+    });
+  }
+
   await app.register(healthRoutes);
   await app.register(demoCaseRoutes);
   await app.register(auditRoutes, {
     ranker: options.ranker !== undefined ? options.ranker : createAuditRanker(),
+    caseRepository,
   });
 
   return app;
@@ -74,6 +95,12 @@ async function start() {
         "VultronRetriever is NOT configured — /api/demo-case works, but audit runs will fail " +
           "until VULTR_INFERENCE_API_KEY, VULTR_INFERENCE_BASE_URL and " +
           "VULTR_INFERENCE_RETRIEVER_MODEL are set.",
+      );
+    }
+    if (!isPersistenceConfigured) {
+      app.log.warn(
+        "Vultr persistence is NOT configured — audit runs will 503 until DATABASE_URL " +
+          "(Vultr Managed PostgreSQL) is set. There is no in-memory fallback (see docs/Rules.md).",
       );
     }
   } catch (err) {

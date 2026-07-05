@@ -5,6 +5,15 @@ import type { AuditReport, Finding, RunAuditResponse } from "@feeforensics/share
 
 import { buildServer } from "../server.js";
 import { DEMO_CASE_ID } from "../data/demoCase.js";
+import { InMemoryCaseRepository } from "../data/caseRepository.fake.js";
+
+/**
+ * Persistence is required in production (Vultr Managed PostgreSQL, no in-memory
+ * fallback — see docs/Rules.md). Tests inject this in-memory double so the API
+ * can be exercised without a live database; it is never wired into the
+ * production default.
+ */
+const newRepo = () => new InMemoryCaseRepository();
 
 /**
  * Route tests for the VultronRetriever-only audit pipeline: POST run-audit
@@ -54,7 +63,7 @@ describe("POST /api/cases/:caseId/run-audit — VultronRetriever-only pipeline",
   let body: AuditRouteBody;
 
   beforeAll(async () => {
-    app = await buildServer({ ranker: scriptedRanker });
+    app = await buildServer({ ranker: scriptedRanker, caseRepository: newRepo() });
     const res = await app.inject({ method: "POST", url: runAuditUrl(DEMO_CASE_ID) });
     expect(res.statusCode).toBe(200);
     body = res.json();
@@ -111,7 +120,7 @@ describe("POST /api/cases/:caseId/run-audit — VultronRetriever-only pipeline",
 
 describe("GET /api/cases/:caseId/report", () => {
   it("serves the report from the most recent real run", async () => {
-    const app = await buildServer({ ranker: scriptedRanker });
+    const app = await buildServer({ ranker: scriptedRanker, caseRepository: newRepo() });
     try {
       await app.inject({ method: "POST", url: runAuditUrl(DEMO_CASE_ID) });
       const res = await app.inject({ method: "GET", url: reportUrl(DEMO_CASE_ID) });
@@ -130,7 +139,7 @@ describe("GET /api/cases/:caseId/report", () => {
   });
 
   it("tells the caller to run the audit first when no run exists — never the mock", async () => {
-    const app = await buildServer({ ranker: scriptedRanker });
+    const app = await buildServer({ ranker: scriptedRanker, caseRepository: newRepo() });
     try {
       const res = await app.inject({ method: "GET", url: reportUrl(DEMO_CASE_ID) });
       expect(res.statusCode).toBe(404);
@@ -150,7 +159,7 @@ describe("run-audit when the reranker fails mid-run", () => {
     const failingRanker: ChunkRanker = async () => {
       throw new Error("connect ECONNREFUSED (Vultr inference unreachable)");
     };
-    const app = await buildServer({ ranker: failingRanker });
+    const app = await buildServer({ ranker: failingRanker, caseRepository: newRepo() });
     try {
       const res = await app.inject({ method: "POST", url: runAuditUrl(DEMO_CASE_ID) });
       expect(res.statusCode).toBe(200);
@@ -188,11 +197,41 @@ describe("run-audit when the VultronRetriever is not configured", () => {
   });
 });
 
+// --- Unconfigured persistence: fail loudly, don't silently skip the DB -----------
+
+describe("audit routes when Vultr persistence is not configured", () => {
+  it("run-audit returns 503 rather than completing a run it cannot persist", async () => {
+    // `caseRepository: null` = what default wiring resolves to when DATABASE_URL
+    // is missing. The reranker IS configured, so this isolates the persistence gate.
+    const app = await buildServer({ ranker: scriptedRanker, caseRepository: null });
+    try {
+      const res = await app.inject({ method: "POST", url: runAuditUrl(DEMO_CASE_ID) });
+      expect(res.statusCode).toBe(503);
+      const body = res.json();
+      expect(body.error).toBe("persistence_not_configured");
+      expect(body.message).toContain("DATABASE_URL");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("GET report returns 503 when persistence is unconfigured", async () => {
+    const app = await buildServer({ ranker: scriptedRanker, caseRepository: null });
+    try {
+      const res = await app.inject({ method: "GET", url: reportUrl(DEMO_CASE_ID) });
+      expect(res.statusCode).toBe(503);
+      expect(res.json().error).toBe("persistence_not_configured");
+    } finally {
+      await app.close();
+    }
+  });
+});
+
 // --- PR #16 hardening still intact (smoke) ----------------------------------------
 
 describe("hardening smoke checks", () => {
   it("keeps the per-IP rate limit", async () => {
-    const app = await buildServer({ ranker: scriptedRanker });
+    const app = await buildServer({ ranker: scriptedRanker, caseRepository: newRepo() });
     try {
       for (let i = 0; i < 60; i++) {
         const res = await app.inject({ method: "GET", url: "/health" });
@@ -207,7 +246,7 @@ describe("hardening smoke checks", () => {
   });
 
   it("keeps the request body cap", async () => {
-    const app = await buildServer({ ranker: scriptedRanker });
+    const app = await buildServer({ ranker: scriptedRanker, caseRepository: newRepo() });
     try {
       const res = await app.inject({
         method: "POST",

@@ -48,6 +48,14 @@ const EnvSchema = z.object({
    * VultronRetriever* flavor). Unset → every call uses VULTR_INFERENCE_MODEL.
    */
   VULTR_INFERENCE_RETRIEVER_MODEL: z.string().optional(),
+
+  /**
+   * Vultr Managed PostgreSQL connection string (case metadata + audit reports).
+   * Required in production — there is NO in-memory fallback (see docs/Rules.md);
+   * when unset, the audit routes fail loudly with 503 instead of skipping
+   * persistence. Optional here only so the API still boots for local UI work.
+   */
+  DATABASE_URL: z.string().min(1).optional(),
 });
 
 export const env = EnvSchema.parse(process.env);
@@ -67,6 +75,12 @@ export const isRankerConfigured = Boolean(
     env.VULTR_INFERENCE_BASE_URL &&
     env.VULTR_INFERENCE_RETRIEVER_MODEL,
 );
+
+/**
+ * Whether Vultr-backed persistence (Managed PostgreSQL) is configured. When
+ * false, the audit routes 503 rather than falling back to an in-memory store.
+ */
+export const isPersistenceConfigured = Boolean(env.DATABASE_URL);
 
 export const corsOrigins = env.CORS_ORIGIN.split(",")
   .map((o) => o.trim())
