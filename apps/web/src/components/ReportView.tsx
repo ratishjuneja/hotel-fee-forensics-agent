@@ -7,6 +7,8 @@ import type {
   Severity,
 } from "@feeforensics/shared";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
 import { CitationPill } from "@/components/CitationPill";
 import { EvidenceProvider } from "@/components/EvidenceProvider";
 import { ConfidenceMeter } from "@/components/ConfidenceMeter";
@@ -17,11 +19,11 @@ import type { SourceDocument } from "@/lib/documents";
 import type { DisputeContext } from "@/lib/disputePacket";
 import { CHECK_LABEL, cn, formatCurrency } from "@/lib/utils";
 
-const SEVERITY_STYLE: Record<Severity, string> = {
-  high: "bg-rose-100 text-rose-700",
-  medium: "bg-amber-100 text-amber-800",
-  low: "bg-slate-100 text-slate-600",
-  review: "bg-slate-100 text-slate-600",
+const SEVERITY_VARIANT: Record<Severity, "danger" | "warning" | "neutral"> = {
+  high: "danger",
+  medium: "warning",
+  low: "neutral",
+  review: "neutral",
 };
 
 const ACTION_LABEL: Record<RecommendedAction, string> = {
@@ -41,16 +43,16 @@ export interface ReportViewProps {
   memoFilename: string;
   /** Downloaded dispute-packet filename. */
   packetFilename: string;
-  /** Evidence-viewer registry. Omit for the bundled demo documents. */
+  /** Evidence-viewer registry built from the case's parsed uploads. */
   documents?: Record<string, SourceDocument>;
-  /** Party/period the dispute packet is addressed with. Omit for the demo. */
+  /** Party/period the dispute packet is addressed with. */
   disputeContext?: DisputeContext;
   /** Export-PDF (print route) link; omit when the case has no print route. */
   printHref?: string;
 }
 
 /**
- * The findings + calculation + memo + dispute report body for an uploaded case.
+ * The findings + calculation + memo + dispute report for an uploaded case.
  * Everything it renders comes from the case's own run: the report, the evidence
  * registry built from the uploaded documents, and the case's party/period labels.
  */
@@ -74,28 +76,28 @@ export function ReportView({
 
   return (
     <EvidenceProvider documents={documents}>
-      <div className="mx-auto max-w-4xl px-4 py-10">
-        <Link
-          href={backHref}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-700"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to trace
-        </Link>
+      <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
+        <Button asChild variant="ghost" size="sm" className="-ml-2">
+          <Link href={backHref}>
+            <ArrowLeft className="h-4 w-4" />
+            Back to trace
+          </Link>
+        </Button>
 
         {/* Impact strip */}
-        <section className="mt-4 card flex flex-wrap items-center justify-between gap-6 p-6">
+        <Card className="mt-4 grid gap-6 p-6 sm:grid-cols-[1.2fr_1fr] sm:items-center">
           <div>
-            <p className="text-sm text-slate-600">Total suspected overcharge</p>
-            <p className="text-4xl font-bold text-rose-600">
+            <p className="text-sm text-muted">Total suspected overcharge</p>
+            <p className="mt-1 font-mono text-4xl font-semibold tabular-nums text-danger sm:text-5xl">
               {formatCurrency(report.totalSuspectedOvercharge)}
             </p>
-            <p className="mt-1 text-sm text-slate-500">
-              {findings.length} findings · {subtitle}
+            <p className="mt-1.5 text-sm text-subtle">
+              {findings.length} {findings.length === 1 ? "finding" : "findings"}{" "}
+              · {subtitle}
             </p>
           </div>
-          <div>
-            <p className="text-sm text-slate-600">Confidence</p>
+          <div className="border-t border-border pt-5 sm:border-l sm:border-t-0 sm:pl-6 sm:pt-0">
+            <p className="mb-2 text-sm text-muted">Confidence</p>
             <ConfidenceMeter
               confidence={report.confidence}
               {...(report.confidenceBreakdown
@@ -103,67 +105,68 @@ export function ReportView({
                 : {})}
             />
           </div>
-        </section>
+        </Card>
 
         {/* Findings */}
-        <h2 className="mt-10 text-lg font-bold tracking-tight">Findings</h2>
+        <SectionHeading className="mt-10">Findings</SectionHeading>
         <div className="mt-3 space-y-4">
           {findings.map((finding, i) => (
             <FindingCard key={finding.id} finding={finding} check={checkFor(i)} />
           ))}
         </div>
 
-        {/* Calculation breakdown */}
-        <h2 className="mt-10 text-lg font-bold tracking-tight">
-          Calculation breakdown
-        </h2>
-        <p className="mt-1 text-sm text-slate-500">
+        {/* Calculation ledger */}
+        <SectionHeading className="mt-10">Calculation breakdown</SectionHeading>
+        <p className="mt-1 text-sm text-muted">
           Every number below is computed by the deterministic calculator, not the
           model.
         </p>
-        <div className="mt-3 card overflow-hidden">
-          <table className="w-full text-sm">
-            <tbody className="divide-y divide-slate-100">
-              <Row label="Expected base fee" value={calculationResult.expectedBaseFee} />
-              <Row
-                label="Expected incentive fee"
-                value={calculationResult.expectedIncentiveFee}
-              />
-              <Row
-                label="Expected total fees"
-                value={calculationResult.expectedTotalFees}
-                strong
-              />
-              <Row
-                label="Charged total fees"
-                value={calculationResult.chargedTotalFees}
-                strong
-              />
-              <tr className="bg-rose-50">
-                <td className="px-4 py-3 font-semibold text-rose-700">
-                  Variance (overcharge)
-                </td>
-                <td className="px-4 py-3 text-right font-mono font-bold text-rose-700">
-                  {formatCurrency(calculationResult.variance)}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <Card className="mt-3 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <tbody className="divide-y divide-border">
+                <LedgerRow
+                  label="Expected base fee"
+                  value={calculationResult.expectedBaseFee}
+                />
+                <LedgerRow
+                  label="Expected incentive fee"
+                  value={calculationResult.expectedIncentiveFee}
+                />
+                <LedgerRow
+                  label="Expected total fees"
+                  value={calculationResult.expectedTotalFees}
+                  strong
+                />
+                <LedgerRow
+                  label="Charged total fees"
+                  value={calculationResult.chargedTotalFees}
+                  strong
+                />
+                <tr className="bg-danger-soft/60">
+                  <td className="px-4 py-3 font-semibold text-danger-soft-foreground">
+                    Variance (overcharge)
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono font-bold tabular-nums text-danger-soft-foreground">
+                    {formatCurrency(calculationResult.variance)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </Card>
 
         {/* Memo */}
         <div className="mt-10 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-bold tracking-tight">Audit memo</h2>
+          <SectionHeading>Audit memo</SectionHeading>
           <div className="flex items-center gap-2">
             {printHref && (
-              <Link
-                href={printHref}
-                target="_blank"
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-brand-300 hover:text-brand-700"
-              >
-                <Printer className="h-4 w-4" />
-                Export PDF
-              </Link>
+              <Button asChild variant="outline" size="sm">
+                <Link href={printHref} target="_blank">
+                  <Printer className="h-4 w-4" />
+                  Export PDF
+                </Link>
+              </Button>
             )}
             <DownloadButton
               content={memoMarkdown}
@@ -172,9 +175,9 @@ export function ReportView({
             />
           </div>
         </div>
-        <div className="mt-3 card p-6">
+        <Card className="mt-3 p-6">
           <Markdown>{memoMarkdown}</Markdown>
-        </div>
+        </Card>
 
         {/* Dispute builder */}
         <div className="mt-10">
@@ -189,7 +192,26 @@ export function ReportView({
   );
 }
 
-function Row({
+function SectionHeading({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <h2
+      className={cn(
+        "text-lg font-semibold tracking-tight text-foreground",
+        className,
+      )}
+    >
+      {children}
+    </h2>
+  );
+}
+
+function LedgerRow({
   label,
   value,
   strong,
@@ -202,16 +224,16 @@ function Row({
     <tr>
       <td
         className={cn(
-          "px-4 py-3 text-slate-600",
-          strong && "font-semibold text-slate-900",
+          "px-4 py-3 text-muted",
+          strong && "font-semibold text-foreground",
         )}
       >
         {label}
       </td>
       <td
         className={cn(
-          "px-4 py-3 text-right font-mono text-slate-700",
-          strong && "font-semibold text-slate-900",
+          "px-4 py-3 text-right font-mono tabular-nums text-foreground",
+          strong && "font-semibold",
         )}
       >
         {formatCurrency(value)}
@@ -222,32 +244,32 @@ function Row({
 
 function FindingCard({ finding, check }: { finding: Finding; check?: string }) {
   return (
-    <article className="card p-5">
+    <Card className="p-5" interactive>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge className={SEVERITY_STYLE[finding.severity]}>
+            <Badge variant={SEVERITY_VARIANT[finding.severity]}>
               {finding.severity}
             </Badge>
-            {check && (
-              <Badge className="bg-brand-50 text-brand-700 ring-1 ring-brand-100">
-                Detected by {check}
-              </Badge>
-            )}
+            {check && <Badge variant="neutral">Detected by {check}</Badge>}
           </div>
-          <h3 className="mt-2 font-semibold text-slate-900">{finding.title}</h3>
+          <h3 className="mt-2 font-semibold text-foreground">
+            {finding.title}
+          </h3>
         </div>
         <div className="text-right">
-          <p className="text-xl font-bold text-rose-600">
+          <p className="font-mono text-xl font-semibold tabular-nums text-danger">
             {formatCurrency(finding.suspectedImpact)}
           </p>
-          <p className="text-xs font-medium text-slate-500">
+          <p className="text-xs font-medium text-muted">
             {ACTION_LABEL[finding.recommendedAction]}
           </p>
         </div>
       </div>
 
-      <p className="mt-3 text-sm text-slate-600">{finding.explanation}</p>
+      <p className="mt-3 text-sm leading-relaxed text-muted">
+        {finding.explanation}
+      </p>
 
       {finding.citations.length > 0 && (
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -256,6 +278,6 @@ function FindingCard({ finding, check }: { finding: Finding; check?: string }) {
           ))}
         </div>
       )}
-    </article>
+    </Card>
   );
 }

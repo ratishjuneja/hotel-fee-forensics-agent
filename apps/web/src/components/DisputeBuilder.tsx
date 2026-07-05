@@ -11,14 +11,15 @@ import {
   summarize,
   type DisputeContext,
 } from "@/lib/disputePacket";
+import { Card } from "@/components/ui/Card";
 import { CopyButton } from "./CopyButton";
 import { DownloadButton } from "./DownloadButton";
 import { cn, formatCurrency } from "@/lib/utils";
 
 const KIND_STYLE: Record<string, string> = {
-  overcharge: "text-rose-600",
-  unsupported: "text-amber-600",
-  review: "text-slate-500",
+  overcharge: "text-danger",
+  unsupported: "text-warning-soft-foreground",
+  review: "text-muted",
 };
 
 /**
@@ -60,14 +61,16 @@ export function DisputeBuilder({
 
   return (
     <section>
-      <h2 className="text-lg font-bold tracking-tight">Build dispute packet</h2>
-      <p className="mt-1 text-sm text-slate-500">
+      <h2 className="text-lg font-semibold tracking-tight text-foreground">
+        Build the dispute
+      </h2>
+      <p className="mt-1 text-sm text-muted">
         Choose which findings to pursue. The total, email, and downloadable
         packet update instantly — every figure comes from the calculator.
       </p>
 
       {/* Finding selector */}
-      <div className="mt-3 space-y-2">
+      <div className="mt-4 space-y-2">
         {findings.map((f) => {
           const on = selectedIds.has(f.id);
           const kind = disputeKind(f);
@@ -78,34 +81,34 @@ export function DisputeBuilder({
               onClick={() => toggle(f.id)}
               aria-pressed={on}
               className={cn(
-                "flex w-full items-center gap-3 rounded-lg border p-3 text-left transition",
+                "flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors",
                 on
-                  ? "border-brand-300 bg-brand-50/60"
-                  : "border-slate-200 bg-white hover:border-slate-300",
+                  ? "border-primary/40 bg-primary-soft/50"
+                  : "border-border bg-surface hover:border-border-strong",
               )}
             >
               <span
                 className={cn(
                   "flex h-5 w-5 shrink-0 items-center justify-center rounded border",
                   on
-                    ? "border-brand-600 bg-brand-600 text-white"
-                    : "border-slate-300 bg-white",
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border-strong bg-surface",
                 )}
               >
-                {on && <Check className="h-3.5 w-3.5" />}
+                {on && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium text-slate-900">
+                <span className="block truncate font-medium text-foreground">
                   {f.title}
                 </span>
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-muted">
                   <span className={cn("font-medium", KIND_STYLE[kind])}>
                     {kind}
                   </span>{" "}
                   · {actionLabel(f)}
                 </span>
               </span>
-              <span className="shrink-0 font-mono font-semibold text-rose-600">
+              <span className="shrink-0 font-mono tabular-nums font-semibold text-danger">
                 {formatCurrency(f.suspectedImpact)}
               </span>
             </button>
@@ -114,15 +117,15 @@ export function DisputeBuilder({
       </div>
 
       {/* Live summary + actions */}
-      <div className="mt-4 card flex flex-wrap items-center justify-between gap-4 p-4">
+      <Card className="mt-4 flex flex-wrap items-center justify-between gap-4 p-4">
         <div>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-muted">
             Dispute total · {summary.count} of {findings.length} findings
           </p>
-          <p className="text-2xl font-bold text-rose-600">
+          <p className="mt-0.5 font-mono text-2xl font-semibold tabular-nums text-danger">
             {formatCurrency(summary.total)}
           </p>
-          <p className="mt-0.5 text-xs text-slate-500">
+          <p className="mt-0.5 text-xs text-subtle">
             {formatCurrency(summary.overcharge)} overcharge ·{" "}
             {formatCurrency(summary.unsupported)} unsupported
           </p>
@@ -138,24 +141,24 @@ export function DisputeBuilder({
             label="Download packet"
           />
         </div>
-      </div>
+      </Card>
 
       {/* Generated email preview */}
       {none ? (
-        <div className="mt-4 card p-6 text-sm text-slate-500">
+        <Card className="mt-4 p-6 text-sm text-muted">
           Select at least one finding to generate the dispute email.
-        </div>
+        </Card>
       ) : (
-        <div className="mt-4 card p-6">
-          <p className="text-sm font-semibold text-slate-500">
+        <Card className="mt-4 p-6">
+          <p className="text-xs font-semibold uppercase tracking-wider text-subtle">
             Draft dispute email · Subject
           </p>
-          <p className="mt-0.5 font-medium text-slate-900">{email.subject}</p>
-          <hr className="my-4 border-slate-100" />
-          <pre className="whitespace-pre-wrap font-sans text-sm text-slate-700">
+          <p className="mt-1 font-medium text-foreground">{email.subject}</p>
+          <hr className="my-4 border-border" />
+          <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-muted">
             {email.body}
           </pre>
-        </div>
+        </Card>
       )}
     </section>
   );
