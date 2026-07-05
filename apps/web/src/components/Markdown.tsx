@@ -23,7 +23,7 @@ const safeUrl = (url: string): string => {
 
 export function Markdown({ children }: { children: string }) {
   return (
-    <div className="prose prose-slate max-w-none prose-headings:font-semibold prose-h2:text-xl prose-h3:text-base prose-table:text-sm prose-th:text-left prose-td:align-top">
+    <div className="prose prose-sm max-w-none dark:prose-invert prose-headings:font-semibold prose-headings:tracking-tight prose-h2:text-xl prose-h3:text-base prose-p:text-muted prose-strong:text-foreground prose-table:text-sm prose-th:text-left prose-td:align-top prose-a:text-primary">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         urlTransform={safeUrl}

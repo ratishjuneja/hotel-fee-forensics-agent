@@ -1,8 +1,10 @@
 "use client";
 
 import { Download } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { toast } from "@/components/ui/Toaster";
 
-/** Downloads `content` as a local file (used for the memo markdown). */
+/** Downloads `content` as a local file (memo markdown / dispute packet). */
 export function DownloadButton({
   content,
   filename,
@@ -20,16 +22,13 @@ export function DownloadButton({
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+    toast.success("Download started", { description: filename });
   }
 
   return (
-    <button
-      type="button"
-      onClick={handleDownload}
-      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-    >
+    <Button type="button" variant="outline" size="sm" onClick={handleDownload}>
       <Download className="h-4 w-4" />
       {label}
-    </button>
+    </Button>
   );
 }

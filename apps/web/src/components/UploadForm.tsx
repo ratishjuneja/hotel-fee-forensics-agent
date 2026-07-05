@@ -3,14 +3,18 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  AlertTriangle,
   ArrowRight,
   FileText,
-  Loader2,
-  Info,
   UploadCloud,
   X,
 } from "lucide-react";
 import { ApiError, createCase, type NewCaseUpload } from "@/lib/api";
+import { Button } from "@/components/ui/Button";
+import { Checkbox } from "@/components/ui/Checkbox";
+import { Label } from "@/components/ui/Label";
+import { Textarea } from "@/components/ui/Textarea";
+import { toast } from "@/components/ui/Toaster";
 import { cn } from "@/lib/utils";
 
 type SlotKey = keyof Pick<
@@ -27,36 +31,39 @@ interface Slot {
 }
 
 /** One labeled slot per document role — mirrors the API's multipart contract. */
-const SLOTS: Slot[] = [
+const REQUIRED_SLOTS: Slot[] = [
   {
     key: "hma",
-    label: "Hotel Management Agreement (HMA)",
-    hint: "The agreement with the fee clauses · PDF, TXT or MD",
+    label: "Hotel management agreement",
+    hint: "The contract with the fee clauses · PDF, TXT, or MD",
     accept: ".pdf,.txt,.md",
     required: true,
   },
   {
     key: "statement",
-    label: "Operating Statement",
+    label: "Operating statement",
     hint: "The audit month's USALI operating statement · CSV",
     accept: ".csv",
     required: true,
   },
+];
+
+const OPTIONAL_SLOTS: Slot[] = [
   {
     key: "statementPrior",
-    label: "Past Operating Statement",
-    hint: "A prior month — the baseline for anomaly checks · CSV",
+    label: "Prior month's statement",
+    hint: "A baseline for the anomaly checks · CSV",
     accept: ".csv",
   },
   {
     key: "supportPack",
-    label: "Collated Invoices",
-    hint: "Support / invoice pack backing the month's charges · CSV",
+    label: "Invoice / support pack",
+    hint: "Backing detail for the month's charges · CSV",
     accept: ".csv",
   },
   {
     key: "supplementary",
-    label: "Supplementary schedule (optional)",
+    label: "Supplementary schedule",
     hint: "Detail behind a statement roll-up, e.g. a misc-income breakout · CSV",
     accept: ".csv",
   },
@@ -103,16 +110,22 @@ export function UploadForm() {
       router.push(`/cases/${caseId}`);
     } catch (err) {
       // Honest failure — never fake analysis of files that were not accepted.
-      setFailure(err instanceof ApiError ? err.message : "Upload failed.");
+      const message = err instanceof ApiError ? err.message : "Upload failed.";
+      setFailure(message);
+      toast.error("Upload could not be completed", {
+        description: "Your files were not stored or analyzed. Please try again.",
+      });
       setSubmitting(false);
     }
   };
 
   return (
     <div>
-      {/* Document slots */}
-      <div className="space-y-3">
-        {SLOTS.map((slot) => (
+      <fieldset className="space-y-3">
+        <legend className="mb-2 text-xs font-semibold uppercase tracking-wider text-subtle">
+          Required
+        </legend>
+        {REQUIRED_SLOTS.map((slot) => (
           <FileSlot
             key={slot.key}
             slot={slot}
@@ -120,71 +133,73 @@ export function UploadForm() {
             onChange={(f) => setFile(slot.key, f)}
           />
         ))}
-      </div>
+      </fieldset>
 
-      {/* Additional info */}
-      <label className="mt-5 block">
-        <span className="text-sm font-medium text-slate-700">
-          Additional info
-        </span>
-        <textarea
+      <fieldset className="mt-6 space-y-3">
+        <legend className="mb-2 text-xs font-semibold uppercase tracking-wider text-subtle">
+          Optional — strengthen the evidence checks
+        </legend>
+        {OPTIONAL_SLOTS.map((slot) => (
+          <FileSlot
+            key={slot.key}
+            slot={slot}
+            file={files[slot.key]}
+            onChange={(f) => setFile(slot.key, f)}
+          />
+        ))}
+      </fieldset>
+
+      <div className="mt-6 space-y-1.5">
+        <Label htmlFor="ownerNotes">Anything the audit should know?</Label>
+        <Textarea
+          id="ownerNotes"
           value={ownerNotes}
           onChange={(e) => setOwnerNotes(e.target.value)}
           rows={3}
-          placeholder="Anything the audit should know — e.g. charges you already questioned, approvals you never gave…"
-          className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white p-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-brand-400 focus:outline-none focus:ring-1 focus:ring-brand-300"
+          placeholder="Charges you already questioned, approvals you never gave, context on a line item…"
         />
-      </label>
+      </div>
 
-      {/* Draft email opt-out */}
-      <label className="mt-3 flex items-center gap-2 text-sm text-slate-700">
-        <input
-          type="checkbox"
+      <label className="mt-4 flex cursor-pointer items-center gap-2.5 text-sm text-foreground">
+        <Checkbox
           checked={draftEmail}
-          onChange={(e) => setDraftEmail(e.target.checked)}
-          className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-400"
+          onCheckedChange={(v) => setDraftEmail(v === true)}
         />
         Draft a dispute email from the findings
       </label>
 
-      {/* Submit */}
-      <button
-        type="button"
-        onClick={onSubmit}
-        disabled={!canSubmit || submitting}
-        className="mt-5 inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-3 font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {submitting ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Uploading…
-          </>
-        ) : (
-          <>
-            Upload &amp; run audit
-            <ArrowRight className="h-4 w-4" />
-          </>
+      <div className="mt-6">
+        <Button
+          type="button"
+          size="lg"
+          onClick={onSubmit}
+          disabled={!canSubmit}
+          loading={submitting}
+        >
+          {submitting ? "Uploading…" : "Upload & run the audit"}
+          {!submitting && <ArrowRight className="h-4 w-4" />}
+        </Button>
+        {!canSubmit && (
+          <p className="mt-2.5 text-xs text-subtle">
+            The agreement and the operating statement are required. The other
+            documents are optional but sharpen the evidence checks.
+          </p>
         )}
-      </button>
-      {!canSubmit && (
-        <p className="mt-2 text-xs text-slate-500">
-          The HMA and the operating statement are required; the other documents
-          strengthen the audit&apos;s evidence checks.
-        </p>
-      )}
+      </div>
 
-      {/* Honest failure — the upload did not happen; nothing was analyzed */}
+      {/* Honest failure — the upload did not happen; nothing was analyzed. */}
       {failure && (
-        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <div className="flex items-start gap-2">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-            <div className="text-sm text-amber-900">
-              <p className="font-semibold">The upload could not be completed.</p>
-              <p className="mt-1 text-amber-800">
-                {failure} Your files were not stored or analyzed — nothing was
-                audited. Check the documents and try the upload again.
-              </p>
-            </div>
+        <div
+          role="alert"
+          className="mt-6 flex items-start gap-3 rounded-xl border border-warning-soft-foreground/25 bg-warning-soft p-4"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning-soft-foreground" />
+          <div className="text-sm text-warning-soft-foreground">
+            <p className="font-semibold">The upload could not be completed.</p>
+            <p className="mt-1 opacity-90">
+              {failure} Your files were not stored or analyzed — nothing was
+              audited. Check the documents and try again.
+            </p>
           </div>
         </div>
       )}
@@ -218,33 +233,43 @@ function FileSlot({
         if (dropped) onChange(dropped);
       }}
       className={cn(
-        "flex items-center gap-3 rounded-xl border p-4 transition",
+        "flex items-center gap-3 rounded-xl border p-4 transition-colors",
         dragging
-          ? "border-brand-400 border-dashed bg-brand-50/60"
+          ? "border-primary border-dashed bg-primary-soft"
           : file
-            ? "border-emerald-200 bg-emerald-50/40"
-            : "border-slate-200 bg-white",
+            ? "border-success/40 bg-success-soft/50"
+            : "border-dashed border-border-strong bg-surface hover:border-primary/50",
       )}
     >
       <div
         className={cn(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
-          file ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-400",
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors",
+          file
+            ? "bg-success-soft text-success-soft-foreground"
+            : "bg-surface-2 text-subtle",
         )}
       >
-        {file ? <FileText className="h-4 w-4" /> : <UploadCloud className="h-4 w-4" />}
+        {file ? (
+          <FileText className="h-4 w-4" />
+        ) : (
+          <UploadCloud className="h-4 w-4" />
+        )}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-slate-800">
+        <p className="text-sm font-medium text-foreground">
           {slot.label}
-          {slot.required && <span className="ml-1 text-rose-500">*</span>}
+          {slot.required && (
+            <span className="ml-1 text-danger" aria-hidden>
+              *
+            </span>
+          )}
         </p>
         {file ? (
-          <p className="mt-0.5 truncate text-xs text-slate-500">
-            {file.name} · {fmtSize(file.size)}
+          <p className="mt-0.5 truncate text-xs text-muted">
+            {file.name} · <span className="font-mono">{fmtSize(file.size)}</span>
           </p>
         ) : (
-          <p className="mt-0.5 text-xs text-slate-500">{slot.hint}</p>
+          <p className="mt-0.5 text-xs text-muted">{slot.hint}</p>
         )}
       </div>
       {file && (
@@ -252,23 +277,25 @@ function FileSlot({
           type="button"
           onClick={() => onChange(undefined)}
           aria-label={`Remove ${file.name}`}
-          className="shrink-0 rounded p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+          className="shrink-0 rounded-md p-1 text-subtle transition-colors hover:bg-surface-2 hover:text-foreground"
         >
           <X className="h-4 w-4" />
         </button>
       )}
-      <button
+      <Button
         type="button"
+        variant="outline"
+        size="sm"
         onClick={() => inputRef.current?.click()}
-        className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:border-brand-300 hover:text-brand-700"
       >
         {file ? "Replace" : "Choose file"}
-      </button>
+      </Button>
       <input
         ref={inputRef}
         type="file"
         accept={slot.accept}
         className="hidden"
+        aria-label={slot.label}
         onChange={(e) => {
           const chosen = e.target.files?.[0];
           if (chosen) onChange(chosen);

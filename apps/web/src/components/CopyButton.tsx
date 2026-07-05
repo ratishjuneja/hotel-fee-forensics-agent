@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { Check, Copy } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/Button";
+import { toast } from "@/components/ui/Toaster";
 
-/** Copies `text` to the clipboard and briefly confirms. */
+/** Copies `text` to the clipboard, confirms inline + via toast. */
 export function CopyButton({
   text,
   label = "Copy",
@@ -20,27 +21,27 @@ export function CopyButton({
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
+      toast.success("Copied to clipboard");
       setTimeout(() => setCopied(false), 1800);
     } catch {
-      // Clipboard blocked (e.g. insecure context) — no-op for the demo.
+      toast.error("Couldn't access the clipboard");
     }
   }
 
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
+      size="sm"
       onClick={handleCopy}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50",
-        className,
-      )}
+      {...(className ? { className } : {})}
     >
       {copied ? (
-        <Check className="h-4 w-4 text-emerald-600" />
+        <Check className="h-4 w-4 text-success" />
       ) : (
         <Copy className="h-4 w-4" />
       )}
       {copied ? "Copied" : label}
-    </button>
+    </Button>
   );
 }

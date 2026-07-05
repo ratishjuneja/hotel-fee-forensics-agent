@@ -8,54 +8,86 @@ export function isLoopStep(step: AgentTraceStep): boolean {
   return /re-retrieval|ambiguous/i.test(`${step.title} ${step.outputSummary}`);
 }
 
-export function TraceRow({ step }: { step: AgentTraceStep }) {
+/**
+ * One node in the agent-trace timeline: a dot on a connector rail (numbered, or
+ * a loop glyph on re-retrieval) plus a content card. LLM steps read primary,
+ * TOOL steps read success; warnings and loop-backs carry their own accent.
+ */
+export function TraceRow({
+  step,
+  isLast,
+}: {
+  step: AgentTraceStep;
+  isLast?: boolean;
+}) {
   const isTool = step.kind === "TOOL";
   const isWarning = step.status === "warning";
   const loop = isLoopStep(step);
 
   return (
-    <li
-      className={cn(
-        "card animate-[fadein_0.3s_ease-out] p-4",
-        isWarning && "border-amber-200 bg-amber-50/60",
-        loop && "border-brand-300 bg-brand-50/50",
+    <li className="relative flex animate-fade-up gap-4 pb-3 last:pb-0">
+      {/* connector rail */}
+      {!isLast && (
+        <span
+          className="absolute left-5 top-11 h-[calc(100%-2.75rem)] w-px -translate-x-1/2 bg-border"
+          aria-hidden
+        />
       )}
-    >
-      <div className="flex gap-3">
-        <div
-          className={cn(
-            "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
-            isTool
-              ? "bg-emerald-100 text-emerald-700"
-              : "bg-brand-100 text-brand-700",
+
+      {/* node */}
+      <span
+        className={cn(
+          "relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-sm font-semibold",
+          loop
+            ? "border-primary/40 bg-primary-soft text-primary-soft-foreground"
+            : isWarning
+              ? "border-warning/40 bg-warning-soft text-warning-soft-foreground"
+              : isTool
+                ? "border-success/40 bg-success-soft text-success-soft-foreground"
+                : "border-primary/40 bg-primary-soft text-primary-soft-foreground",
+        )}
+      >
+        {loop ? <RotateCcw className="h-4 w-4" /> : step.stepNumber}
+      </span>
+
+      {/* content */}
+      <div
+        className={cn(
+          "min-w-0 flex-1 rounded-xl border bg-surface p-4 shadow-sm",
+          isWarning
+            ? "border-warning/30"
+            : loop
+              ? "border-primary/30"
+              : "border-border",
+        )}
+      >
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+          <span className="font-semibold text-foreground">{step.title}</span>
+          <KindBadge isTool={isTool} />
+          {isWarning && (
+            <Badge variant="warning">
+              <AlertTriangle className="h-3 w-3" />
+              variance
+            </Badge>
           )}
-        >
-          {loop ? <RotateCcw className="h-4 w-4" /> : step.stepNumber}
+          {loop && (
+            <Badge variant="primary">
+              <RotateCcw className="h-3 w-3" />
+              re-retrieval loop
+            </Badge>
+          )}
+          {typeof step.evidenceCount === "number" && (
+            <span className="ml-auto font-mono text-xs text-subtle">
+              {step.evidenceCount} evidence
+            </span>
+          )}
         </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold text-slate-900">{step.title}</span>
-            <KindBadge isTool={isTool} />
-            {isWarning && (
-              <Badge className="bg-amber-100 text-amber-800">
-                <AlertTriangle className="h-3 w-3" />
-                variance
-              </Badge>
-            )}
-            {loop && (
-              <Badge className="bg-brand-100 text-brand-700">
-                re-retrieval loop
-              </Badge>
-            )}
-            {typeof step.evidenceCount === "number" && (
-              <span className="text-xs text-slate-400">
-                {step.evidenceCount} evidence
-              </span>
-            )}
-          </div>
-          <p className="mt-1 text-sm text-slate-600">{step.outputSummary}</p>
-          <p className="mt-0.5 text-xs text-slate-400">{step.inputSummary}</p>
-        </div>
+        <p className="mt-1.5 text-sm leading-relaxed text-muted">
+          {step.outputSummary}
+        </p>
+        {step.inputSummary && (
+          <p className="mt-1 text-xs text-subtle">{step.inputSummary}</p>
+        )}
       </div>
     </li>
   );
@@ -63,12 +95,12 @@ export function TraceRow({ step }: { step: AgentTraceStep }) {
 
 export function KindBadge({ isTool }: { isTool: boolean }) {
   return isTool ? (
-    <Badge className="bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200">
+    <Badge variant="success">
       <Cpu className="h-3 w-3" />
       TOOL
     </Badge>
   ) : (
-    <Badge className="bg-brand-100 text-brand-700 ring-1 ring-brand-200">
+    <Badge variant="primary">
       <Sparkles className="h-3 w-3" />
       LLM
     </Badge>
