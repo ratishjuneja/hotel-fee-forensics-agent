@@ -39,6 +39,13 @@ pnpm-debug.log*
 # Test / coverage
 coverage/
 
+# Playwright (e2e run artifacts — keep the specs, ignore outputs)
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+.last-run.json
+
 # OS / editor
 .DS_Store
 Thumbs.db
