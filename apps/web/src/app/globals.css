@@ -2,45 +2,180 @@
 @tailwind components;
 @tailwind utilities;
 
+/**
+ * Design tokens. Values are HSL channel triplets (`H S% L%`) consumed by
+ * Tailwind as `hsl(var(--token) / <alpha-value>)`. Light is the default;
+ * `.dark` on <html> swaps the whole system. Soft variants are the tinted
+ * fills used by badges / callouts and are tuned to pass AA against their
+ * paired *-soft-foreground text in both themes.
+ */
 @layer base {
+  :root {
+    --background: 210 40% 98.5%;
+    --surface: 0 0% 100%;
+    --surface-2: 214 32% 97%;
+    --surface-3: 214 28% 94%;
+    --foreground: 222 38% 12%;
+    --muted: 216 15% 40%;
+    --subtle: 216 14% 55%;
+    --border: 214 26% 89%;
+    --border-strong: 214 20% 80%;
+    --ring: 221 76% 55%;
+
+    --primary: 221 66% 45%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 221 68% 39%;
+    --primary-soft: 221 92% 96%;
+    --primary-soft-foreground: 221 64% 38%;
+
+    --success: 152 52% 33%;
+    --success-foreground: 0 0% 100%;
+    --success-soft: 150 58% 95%;
+    --success-soft-foreground: 154 58% 26%;
+
+    --warning: 30 90% 40%;
+    --warning-foreground: 0 0% 100%;
+    --warning-soft: 40 92% 93%;
+    --warning-soft-foreground: 26 82% 33%;
+
+    --danger: 349 68% 45%;
+    --danger-foreground: 0 0% 100%;
+    --danger-soft: 350 92% 96%;
+    --danger-soft-foreground: 349 66% 40%;
+
+    --shadow: 222 45% 20%;
+    --radius: 0.7rem;
+
+    /* Font aliases → self-hosted Geist (see geist/font in layout.tsx). */
+    --font-sans: var(--font-geist-sans);
+    --font-mono: var(--font-geist-mono);
+  }
+
+  .dark {
+    --background: 223 34% 8%;
+    --surface: 222 27% 11%;
+    --surface-2: 222 22% 14%;
+    --surface-3: 221 20% 18%;
+    --foreground: 213 30% 92%;
+    --muted: 215 17% 64%;
+    --subtle: 216 14% 50%;
+    --border: 216 22% 20%;
+    --border-strong: 216 18% 30%;
+    --ring: 219 84% 66%;
+
+    --primary: 219 74% 60%;
+    --primary-foreground: 222 47% 9%;
+    --primary-hover: 219 78% 67%;
+    --primary-soft: 220 55% 18%;
+    --primary-soft-foreground: 213 92% 82%;
+
+    --success: 152 46% 45%;
+    --success-foreground: 150 60% 6%;
+    --success-soft: 154 40% 16%;
+    --success-soft-foreground: 150 62% 74%;
+
+    --warning: 36 88% 55%;
+    --warning-foreground: 30 80% 8%;
+    --warning-soft: 32 48% 18%;
+    --warning-soft-foreground: 40 90% 72%;
+
+    --danger: 350 74% 62%;
+    --danger-foreground: 349 80% 8%;
+    --danger-soft: 349 42% 20%;
+    --danger-soft-foreground: 350 92% 82%;
+
+    --shadow: 224 60% 3%;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
   html {
     scroll-behavior: smooth;
   }
+
   body {
-    @apply bg-slate-50 text-slate-900 antialiased;
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01";
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Tabular, lining figures everywhere numbers matter (currency, %, ledger). */
+  .tabular-nums,
+  .font-mono {
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum", "lnum";
+  }
+
+  /* One consistent focus treatment for keyboard users across the app. */
+  :where(a, button, input, textarea, select, [role="button"], [tabindex]):focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px hsl(var(--background)),
+      0 0 0 4px hsl(var(--ring));
+    border-radius: calc(var(--radius) - 2px);
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.22);
   }
 }
 
 @layer components {
-  /* Reusable enterprise card surface. */
+  /**
+   * Compatibility shim for screens not yet migrated to the <Card> component.
+   * Themed via tokens so it works in dark mode too; being removed screen by
+   * screen as the redesign lands.
+   */
   .card {
-    @apply rounded-xl border border-slate-200 bg-white shadow-sm;
+    @apply rounded-xl border border-border bg-surface shadow-sm;
   }
 }
 
-@keyframes fadein {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
+@layer utilities {
+  /* Skeleton shimmer sweep; disabled under reduced-motion below. */
+  .shimmer {
+    position: relative;
+    overflow: hidden;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+  .shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--foreground) / 0.06),
+      transparent
+    );
+    animation: shimmer 1.6s infinite;
   }
 }
 
-/* Evidence drawer slide-in from the right. */
-@keyframes slidein {
-  from {
-    transform: translateX(100%);
+/* Respect the OS reduced-motion setting everywhere. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
-  to {
-    transform: translateX(0);
+  html {
+    scroll-behavior: auto;
   }
 }
 
-/* Print / Save-as-PDF: clean margins, white surface, avoid clipped rows. */
+/* Print / Save-as-PDF: force the light surface, clean margins, unbroken rows. */
 @media print {
+  :root {
+    --background: 0 0% 100%;
+    --surface: 0 0% 100%;
+    --foreground: 222 38% 12%;
+  }
   body {
     background: #fff;
   }
