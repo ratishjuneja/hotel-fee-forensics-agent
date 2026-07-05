@@ -2,7 +2,8 @@
   "name": "hotel-fee-forensics-agent",
   "version": "0.1.0",
   "private": true,
-  "description": "FeeForensics — owner-side hotel operator fee audit agent",
+  "description": "BellBoy — owner-side hotel operator fee audit agent",
+  "license": "MIT",
   "workspaces": [
     "apps/*",
     "packages/*"
