@@ -5,6 +5,7 @@ import { GeistMono } from "geist/font/mono";
 import { ShieldCheck } from "lucide-react";
 import { ThemeProvider, themeScript } from "@/components/theme/ThemeProvider";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { Toaster } from "@/components/ui/Toaster";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -36,6 +37,7 @@ export default function RootLayout({
           <SiteHeader />
           <main className="flex-1">{children}</main>
           <SiteFooter />
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>
