@@ -157,6 +157,12 @@ describe("generateReport — Harborline golden case", () => {
     expect(report.memoMarkdown).toContain("HMA §4.2");
   });
 
+  it("renders exact provenance locators (document id + source row) in the trail", async () => {
+    const { report } = await promise;
+    // APPROVAL-0612-03 is row 5 of the support pack CSV.
+    expect(report.memoMarkdown).toContain("(doc_support_pack, row 5)");
+  });
+
   it("recommends action inside the audit window from the extracted rules", async () => {
     const { report } = await promise;
     expect(report.memoMarkdown).toContain("HMA §9.2");

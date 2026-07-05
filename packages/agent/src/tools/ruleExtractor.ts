@@ -284,6 +284,7 @@ function buildCitation(
       documentId: chunk.documentId,
       documentName,
       chunkId: chunk.id,
+      ...(chunk.page !== undefined ? { page: chunk.page } : {}),
       sectionLabel: chunk.sectionLabel ?? chunk.citationLabel,
       quote: quote ?? undefined,
     };
@@ -446,6 +447,7 @@ const clauseCitation = (chunk: DocumentChunk, documentName: string): Citation =>
   documentId: chunk.documentId,
   documentName,
   chunkId: chunk.id,
+  ...(chunk.page !== undefined ? { page: chunk.page } : {}),
   sectionLabel: chunk.sectionLabel ?? chunk.citationLabel,
   quote: normalizeClauseText(chunk.text).slice(0, 200),
 });

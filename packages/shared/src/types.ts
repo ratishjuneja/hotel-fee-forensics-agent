@@ -77,7 +77,12 @@ export interface Citation {
   documentId: string;
   documentName: string;
   chunkId?: string;
+  /** 1-based page in a paginated source (PDF), when the extractor provides it. */
   page?: number;
+  /** 1-based row in a tabular source (CSV), header counted as row 1. */
+  row?: number;
+  /** The specific line the row represents, e.g. "Centralized Services". */
+  lineLabel?: string;
   sectionLabel?: string;
   quote?: string;
 }

@@ -231,12 +231,15 @@ function makeCitation(
   section: string,
   lineItem: string,
   rawAmount: string,
+  row: number,
 ): Citation {
   const safeItem = neutralizeFormula(lineItem);
   return {
     documentId: opts.sourceDocumentId,
     documentName: opts.documentName,
     sectionLabel: section ? `${section} — ${safeItem}` : safeItem,
+    row,
+    lineLabel: safeItem,
     quote: `${safeItem}: ${rawAmount}`,
   };
 }
@@ -284,7 +287,9 @@ export function parseOperatingStatement(
     }
 
     const role = classifyRow(section, usaliLayer);
-    const citation = makeCitation(opts, section, lineItem, rawAmount);
+    // r is the 0-based index into the parsed rows (header at 0), so r + 1 is the
+    // 1-based CSV row the auditor sees when opening the file.
+    const citation = makeCitation(opts, section, lineItem, rawAmount, r + 1);
 
     if (role === "fee") {
       const feeType = classifyFee(lineItem);
@@ -404,7 +409,7 @@ export function parseMiscIncomeBreakout(
       description: neutralizeFormula(lineItem),
       amount,
       normalizedCategory,
-      citation: makeCitation(opts, section, lineItem, rawAmount),
+      citation: makeCitation(opts, section, lineItem, rawAmount, r + 1),
     });
   }
 

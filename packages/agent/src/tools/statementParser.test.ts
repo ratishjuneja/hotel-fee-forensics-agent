@@ -135,6 +135,19 @@ describe("parseOperatingStatement — June (real data/demo CSV)", () => {
       expect(row.citation.quote && row.citation.quote.length).toBeGreaterThan(0);
     }
   });
+
+  it("pins each citation to its exact source CSV row and line label", () => {
+    // Centralized Services sits on line 21 of 02_operating_statement_june.csv.
+    const centralized = result.chargedFees.find((f) =>
+      f.citation.lineLabel?.includes("Centralized Services"),
+    );
+    expect(centralized?.citation.row).toBe(21);
+    expect(centralized?.citation.lineLabel).toBe("Centralized Services");
+
+    // The first data row (Rooms) is CSV row 2 — the header is row 1.
+    expect(byDescription("Rooms")?.citation.row).toBe(2);
+    expect(byDescription("Rooms")?.citation.lineLabel).toBe("Rooms");
+  });
 });
 
 // --- Misc income breakout ---------------------------------------------------
@@ -159,6 +172,11 @@ describe("parseMiscIncomeBreakout — June (real data/demo CSV)", () => {
       amount: 25000,
       normalizedCategory: "INSURANCE_PROCEEDS",
     });
+  });
+
+  it("pins each misc line to its source CSV row (header is row 1)", () => {
+    expect(byDescription("Banquet Cancellation")?.citation.row).toBe(4);
+    expect(byDescription("Insurance Proceeds")?.citation.row).toBe(5);
   });
 
   it("keeps legitimately-included misc lines in the fee base as MISC_INCOME", () => {
