@@ -11,6 +11,7 @@ import {
   scoreConfidence,
   type ConfidenceInput,
   type DecisionInput,
+  type SubjectSupportCheck,
 } from "./decisionEngine.js";
 import { calculateFees } from "./feeCalculator.js";
 import { parseOperatingStatement } from "./statementParser.js";
@@ -273,5 +274,44 @@ describe("decideFindings / scoreConfidence — edge cases", () => {
       recommendedAction: "human_review",
       confidence: 0.75,
     });
+  });
+
+  it("clears a supported pass-through to approve when §5.1 approval is on file", () => {
+    // §5.1's other valid branch: an above-threshold charge WITH the required
+    // approval on file is a valid reimbursement — approved and excluded from the
+    // dispute total, never a human prompt.
+    const calc = syntheticCalc([
+      {
+        issueType: "IMPROPER_PASS_THROUGH",
+        description: "Centralized services charge passed through to owner.",
+        amountImpact: 20000,
+        relatedLineItems: ["Centralized Services"],
+        citations: [cite()],
+      },
+    ]);
+    const supportChecks: SubjectSupportCheck[] = [
+      {
+        subject: "Centralized Services",
+        result: {
+          verdict: "supported",
+          approvalRequired: true,
+          missing: [],
+          explanation: "Invoice INV-1 on file; owner approval APR-1 on file.",
+          citations: [cite()],
+        },
+      },
+    ];
+    const findings = decideFindings({
+      caseId: "c",
+      rules: harborlineRules,
+      calculation: calc,
+      supportChecks,
+    });
+
+    expect(findings[0]).toMatchObject({
+      recommendedAction: "approve",
+      confidence: 0.95,
+    });
+    expect(findings[0]!.title.toLowerCase()).toContain("with support on file");
   });
 });

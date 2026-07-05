@@ -223,6 +223,40 @@ export function computePassThrough(
   );
 }
 
+/**
+ * The §5.1 "within threshold is valid" branch, in dollars.
+ *
+ * A centralized-services / pass-through charge is a cost REIMBURSEMENT, not a
+ * formula fee — there is nothing to recompute. HMA §5.1 defines its treatment
+ * entirely by the approval threshold: a charge at or under the threshold is a
+ * legitimate reimbursement (expected == charged, zero leakage) and an
+ * above-threshold charge needs prior owner approval. This returns the valid,
+ * within-threshold total so the caller can count it as an EXPECTED fee — that
+ * is what keeps a clean month's small centralized charge from surfacing as
+ * unexplained variance (which would wrongly escalate it to a human). The
+ * over-threshold charges are handled separately: the orchestrator synthesizes
+ * each as a CORPORATE_OVERHEAD line and `computePassThrough` flags the full
+ * amount, pending the support-pack approval check.
+ *
+ * Without an extracted threshold we cannot assert any charge is within it, so
+ * we clear nothing — the charge stays in the variance and routes to human
+ * review ("don't hallucinate on missing data").
+ */
+export function sumValidPassThroughFees(
+  rules: FeeRules,
+  chargedFees: ChargedFee[],
+): number {
+  const threshold = rules.passThroughRules?.approvalThreshold;
+  if (threshold == null) return 0;
+  return round2(
+    chargedFees
+      .filter(
+        (f) => f.feeType === "PASS_THROUGH_EXPENSE" && f.chargedAmount <= threshold,
+      )
+      .reduce((acc, f) => acc + f.chargedAmount, 0),
+  );
+}
+
 // --- Orchestration -----------------------------------------------------------
 
 const sumImpacts = (impacts: LineItemImpact[]): number =>
@@ -238,7 +272,14 @@ export function calculateFees(input: FeeCalculatorInput): CalculationResult {
 
   const expectedBaseFee = base.expectedFee;
   const expectedIncentiveFee = incentive.expectedFee;
-  const expectedTotalFees = round2(expectedBaseFee + expectedIncentiveFee);
+  // §5.1: a pass-through charge within the approval threshold is a legitimate
+  // reimbursement (expected == charged), so it is counted as expected here and
+  // reconciles to zero — never falling into the NEEDS_REVIEW residual below.
+  // Above-threshold charges are excluded (they flow through computePassThrough).
+  const expectedPassThroughFees = sumValidPassThroughFees(rules, chargedFees);
+  const expectedTotalFees = round2(
+    expectedBaseFee + expectedIncentiveFee + expectedPassThroughFees,
+  );
   const chargedTotalFees = round2(
     chargedFees.reduce((acc, f) => acc + f.chargedAmount, 0),
   );

@@ -79,6 +79,7 @@ const PROFIT_METRIC_NAMES: Record<string, string> = {
 const FINDING_CONFIDENCE = {
   excludedRevenue: 0.98,
   inflatedProfitMetric: 0.95,
+  supportedPassThrough: 0.95,
   unsupportedPassThrough: 0.9,
   unverifiedPassThrough: 0.75,
   needsReview: 0.4,
@@ -184,9 +185,23 @@ export function decideFindings(input: DecisionInput): Finding[] {
         confidence = FINDING_CONFIDENCE.unsupportedPassThrough;
         explanation = `${impact.description} ${check.result.explanation}`;
         citations.push(...check.result.citations);
+      } else if (
+        check &&
+        (check.result.verdict === "supported" || check.result.verdict === "not_required")
+      ) {
+        // §5.1 satisfied: the support pack shows the required invoice (and, for
+        // an above-threshold charge, the owner's prior approval) on file — the
+        // charge is a valid reimbursement. Record it as a cleared finding
+        // excluded from the dispute total, never a human prompt.
+        title = `${subject} passed through with support on file`;
+        recommendedAction = "approve";
+        confidence = FINDING_CONFIDENCE.supportedPassThrough;
+        explanation = `${impact.description} ${check.result.explanation}`;
+        citations.push(...check.result.citations);
       } else {
-        // No verification ran (or it was inconclusive): the rule flags the
-        // charge, but we cannot assert support is missing — send to a human.
+        // No verification ran (or it was inconclusive / needs_review): the rule
+        // flags the charge, but we cannot assert support is missing — send to a
+        // human.
         title = `${subject} passed through without verified support`;
         recommendedAction = "human_review";
         confidence = FINDING_CONFIDENCE.unverifiedPassThrough;
