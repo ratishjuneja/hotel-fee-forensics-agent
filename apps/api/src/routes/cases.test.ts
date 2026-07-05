@@ -295,6 +295,76 @@ describe("POST /api/cases — BYO upload → parse → run", () => {
     expect(hma.content).toContain("BASE MANAGEMENT FEE");
   });
 
+  it("pauses an unverifiable upload with 202 + pendingQuestions, then completes via /answers", async () => {
+    app = await newServer();
+    // Upload the demo files but OMIT the support pack → the centralized-services
+    // jump still flags, but F3 cannot be verified → the audit must ask the owner.
+    const parts = demoUploadParts([{ name: "hotelName", value: "The Harborline Hotel" }]).filter(
+      (p) => p.name !== "support_pack",
+    );
+    const { body, contentType } = buildMultipart(parts);
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/cases",
+      headers: { "content-type": contentType },
+      payload: body,
+    });
+    const { caseId } = created.json();
+    expect(await waitUntilReady(app, caseId)).toBe("ready");
+
+    // run-audit pauses (202) with a cited question rather than asserting a memo.
+    const run = await app.inject({ method: "POST", url: `/api/cases/${caseId}/run-audit` });
+    expect(run.statusCode).toBe(202);
+    const paused = run.json();
+    expect(paused.status).toBe("awaiting_input");
+    expect(paused.pendingQuestions).toHaveLength(1);
+    const qid = paused.pendingQuestions[0].id;
+    expect(paused.pendingQuestions[0].citations.length).toBeGreaterThan(0);
+    // No report is persisted while paused.
+    const early = await app.inject({ method: "GET", url: `/api/cases/${caseId}/report` });
+    expect(early.statusCode).toBe(404);
+
+    // Answer → the audit REPLAYS with the answer merged and completes (200).
+    const answered = await app.inject({
+      method: "POST",
+      url: `/api/cases/${caseId}/answers`,
+      payload: { answers: { [qid]: "not_authorized" } },
+    });
+    expect(answered.statusCode).toBe(200);
+    const done = answered.json();
+    expect(done.status).toBe("completed");
+    expect(done.pendingQuestions).toBeUndefined();
+    expect(done.memo).toContain("Owner instruction");
+    expect(done.trace.some((s: { kind: string }) => s.kind === "HUMAN")).toBe(true);
+
+    // The report is now persisted and foots to $36,580 (not_authorized == F3 disputed).
+    const report = await app.inject({ method: "GET", url: `/api/cases/${caseId}/report` });
+    expect(report.statusCode).toBe(200);
+    expect(report.json().totalSuspectedOvercharge).toBe(36580);
+  });
+
+  it("400s an /answers body that is not a string→string map", async () => {
+    app = await newServer();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/cases/case_anything/answers",
+      payload: { answers: { q1: 5 } }, // non-string value
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("invalid_answers");
+  });
+
+  it("404s /answers for an unknown case", async () => {
+    app = await newServer();
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/cases/case_nope/answers",
+      payload: { answers: {} },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error).toBe("case_not_found");
+  });
+
   it("503s the upload when object storage is not configured", async () => {
     app = await buildServer({
       ranker: scriptedRanker,
