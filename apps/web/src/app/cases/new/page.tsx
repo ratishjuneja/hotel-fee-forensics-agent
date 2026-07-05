@@ -38,7 +38,7 @@ export default function NewCasePage() {
           <Database className="mt-0.5 h-4 w-4 shrink-0 text-subtle" />
           <p>
             Files are stored in Vultr Object Storage and parsed into a new case.
-            Every figure on the report is computed from what you upload —
+            Every figure on the report is computed from what you upload;
             nothing is pre-filled.
           </p>
         </div>

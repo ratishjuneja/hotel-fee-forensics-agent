@@ -36,7 +36,7 @@ const CAPABILITIES = [
   {
     icon: Quote,
     title: "Cites every claim",
-    body: "Each finding, memo line, and figure points back to a specific clause and financial line — nothing unsupported.",
+    body: "Each finding, memo line, and figure points back to a specific clause and financial line. Nothing unsupported.",
   },
 ];
 
@@ -64,7 +64,7 @@ const SCENARIOS = [
   {
     icon: FileSearch,
     title: "Improper pass-through expense",
-    body: "Corporate support, software, or travel passed through when the base fee should cover it — or it needed your approval.",
+    body: "Corporate support, software, or travel passed through when the base fee should cover it, or when it needed your approval.",
   },
 ];
 
@@ -72,12 +72,12 @@ const STEPS = [
   {
     n: "01",
     title: "Upload your documents",
-    body: "Your management agreement and the month's operating statement — plus a prior month or invoice pack to strengthen the checks.",
+    body: "Your management agreement and the month's operating statement, plus a prior month or invoice pack to strengthen the checks.",
   },
   {
     n: "02",
     title: "Watch the agent work",
-    body: "It plans, retrieves clauses and schedules, extracts the fee rules, and recomputes — every step visible in a live trace.",
+    body: "It plans, retrieves clauses and schedules, extracts the fee rules, and recomputes. Every step is visible in a live trace.",
   },
   {
     n: "03",
@@ -102,7 +102,7 @@ export default function LandingPage() {
           </h1>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted">
             Your operator charges fees from formulas buried in the agreement.
-            Upload the contract and your monthly statements — BellBoy
+            Upload the contract and your monthly statements. BellBoy
             extracts the rules, reruns the math with a deterministic calculator,
             finds the leakage, and writes a dispute-ready memo you can trace
             line by line.
@@ -122,7 +122,7 @@ export default function LandingPage() {
             </Button>
           </div>
           <p className="mt-6 text-xs text-subtle">
-            Runs on Vultr Serverless Inference. Nothing is pre-filled — every
+            Runs on Vultr Serverless Inference. Nothing is pre-filled; every
             number comes from the documents you upload.
           </p>
         </div>
@@ -167,7 +167,7 @@ export default function LandingPage() {
             <p className="mt-4 max-w-md text-muted">
               It doesn&apos;t answer after a single lookup. It plans, retrieves
               documents more than once, extracts structured rules, calls
-              deterministic tools, and only then decides — and you can watch the
+              deterministic tools, and only then decides. You can watch the
               whole thing.
             </p>
             <ol className="mt-8 space-y-6">
@@ -220,7 +220,7 @@ export default function LandingPage() {
               </h2>
               <p className="mt-2 max-w-lg text-muted">
                 Upload your agreement and this month&apos;s statement. The audit
-                runs on your documents, and every figure is computed — never
+                runs on your documents, and every figure is computed, never
                 canned.
               </p>
             </div>
