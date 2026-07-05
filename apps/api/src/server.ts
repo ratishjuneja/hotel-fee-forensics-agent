@@ -2,7 +2,7 @@ import { pathToFileURL } from "node:url";
 import Fastify from "fastify";
 import type { FastifyError } from "fastify";
 import cors from "@fastify/cors";
-import type { ChunkRanker } from "@feeforensics/agent";
+import type { ChunkRanker, PdfExtractor } from "@feeforensics/agent";
 import {
   corsOrigins,
   env,
@@ -14,7 +14,7 @@ import type { BlobStore } from "./data/blobStore.js";
 import type { CaseRepository } from "./data/caseRepository.js";
 import { createAuditRanker } from "./lib/llm.js";
 import { createBlobStore, createCaseRepository } from "./lib/persistence.js";
-import { pdfjsExtractor } from "./lib/pdfExtractor.js";
+import { createOcrPdfExtractor } from "./lib/ocrExtractor.js";
 import { createRateLimiter } from "./lib/rateLimit.js";
 import { healthRoutes } from "./routes/health.js";
 import { demoCaseRoutes } from "./routes/demoCase.js";
@@ -42,6 +42,12 @@ export interface BuildServerOptions {
    * Tests inject an in-memory fake.
    */
   blobStore?: BlobStore | null;
+  /**
+   * PDF text extractor for uploaded HMAs. Omit for the default (pdfjs text layer
+   * + tesseract.js OCR fallback for scanned pages). Tests inject a fake so the
+   * suite never loads real OCR/canvas WASM.
+   */
+  pdfExtractor?: PdfExtractor;
 }
 
 export async function buildServer(options: BuildServerOptions = {}) {
@@ -100,7 +106,11 @@ export async function buildServer(options: BuildServerOptions = {}) {
     ranker: options.ranker !== undefined ? options.ranker : createAuditRanker(),
     caseRepository,
   });
-  await app.register(casesRoutes, { caseRepository, blobStore, pdfExtractor: pdfjsExtractor });
+  await app.register(casesRoutes, {
+    caseRepository,
+    blobStore,
+    pdfExtractor: options.pdfExtractor ?? createOcrPdfExtractor(),
+  });
 
   return app;
 }

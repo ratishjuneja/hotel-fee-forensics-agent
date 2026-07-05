@@ -73,10 +73,11 @@ function defaultAuditMonth(now: Date): string {
 }
 
 /**
- * Decode a text document (HMA). `.txt`/`.md` decode as UTF-8; a digital PDF is
- * run through the injected `pdfExtractor` (pdfjs-dist). A scanned PDF (no text
- * layer) is rejected clearly rather than yielding empty content — OCR lands in
- * PR-16.
+ * Decode a text document (HMA). `.txt`/`.md` decode as UTF-8; a PDF is run
+ * through the injected `pdfExtractor`. In production that extractor is the OCR
+ * ladder (pdfjs text layer + tesseract.js fallback for scanned pages), so a
+ * scanned HMA now parses; only a truly blank/garbage scan (no text even after
+ * OCR) is rejected clearly rather than yielding empty content.
  */
 async function decodeTextDoc(
   file: UploadedFile,
@@ -94,11 +95,13 @@ async function decodeTextDoc(
       return null;
     }
     try {
-      const { text } = await pdfExtractor(file.buffer);
+      const { text, warnings: extractWarnings } = await pdfExtractor(file.buffer);
+      // Surface any extractor notes (e.g. "OCR limited to the first N pages").
+      if (extractWarnings) warnings.push(...extractWarnings);
       if (text.trim().length < 20) {
         warnings.push(
-          "PDF has no extractable text (looks scanned) — OCR is not available yet (PR-16). " +
-            "Upload a digital PDF or a .txt/.md export.",
+          "PDF has no recoverable text — no text layer, and OCR found nothing (blank or " +
+            "unreadable scan). Upload a clearer scan, a digital PDF, or a .txt/.md export.",
         );
         return null;
       }

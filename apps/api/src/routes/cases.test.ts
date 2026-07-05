@@ -3,12 +3,13 @@ import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { ChunkRanker } from "@feeforensics/agent";
+import type { ChunkRanker, PdfExtractor } from "@feeforensics/agent";
 import type { Finding, RunAuditResponse } from "@feeforensics/shared";
 
 import { buildServer } from "../server.js";
 import { InMemoryCaseRepository } from "../data/caseRepository.fake.js";
 import { InMemoryBlobStore } from "../data/blobStore.fake.js";
+import { makeOcrExtractor } from "../lib/ocrExtractor.js";
 
 /**
  * BYO upload flow: POST /api/cases (multipart) → poll GET /api/cases/:id →
@@ -246,6 +247,52 @@ describe("POST /api/cases — BYO upload → parse → run", () => {
     const res = await app.inject({ method: "GET", url: "/api/cases/case_nope/documents" });
     expect(res.statusCode).toBe(404);
     expect(res.json().error).toBe("case_not_found");
+  });
+
+  it("parses a SCANNED-PDF HMA through the OCR ladder and reaches status:ready", async () => {
+    // A scanned PDF has pages but no text layer; the OCR ladder rasterizes each
+    // such page and transcribes it. Here the whole ladder runs through the parse
+    // job with FAKE sub-engines (no real tesseract/canvas WASM in the suite).
+    const scannedDigital: PdfExtractor = async () => ({
+      text: "",
+      pageCount: 1,
+      pages: [{ page: 1, text: "" }], // no extractable text — looks scanned
+    });
+    const ocrExtractor = makeOcrExtractor({
+      digital: scannedDigital,
+      rasterize: async (_b, nums) =>
+        new Map(nums.map((n) => [n, Buffer.from(`bitmap-${n}`)])),
+      ocr: async () =>
+        "4.1 BASE MANAGEMENT FEE.\nThe operator earns three percent of Total Operating Revenue.",
+    });
+
+    app = await buildServer({
+      ranker: scriptedRanker,
+      caseRepository: new InMemoryCaseRepository(),
+      blobStore: new InMemoryBlobStore(),
+      pdfExtractor: ocrExtractor,
+    });
+
+    const { body, contentType } = buildMultipart([
+      { name: "hma", filename: "scan.pdf", contentType: "application/pdf", content: Buffer.from("%PDF-1.7 image-only scan") },
+      { name: "statement", filename: "os.csv", contentType: "text/csv", content: Buffer.from("Line Item,Amount\nRooms,100000\n") },
+    ]);
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/cases",
+      headers: { "content-type": contentType },
+      payload: body,
+    });
+    expect(created.statusCode).toBe(202);
+    const { caseId } = created.json();
+
+    expect(await waitUntilReady(app, caseId)).toBe("ready");
+
+    // The OCR'd clause text is what the evidence viewer serves for the HMA.
+    const docs = await app.inject({ method: "GET", url: `/api/cases/${caseId}/documents` });
+    expect(docs.statusCode).toBe(200);
+    const hma = docs.json().documents.find((d: { docId: string }) => d.docId === "doc_hma");
+    expect(hma.content).toContain("BASE MANAGEMENT FEE");
   });
 
   it("503s the upload when object storage is not configured", async () => {

@@ -9,7 +9,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "smoke:ocr": "tsx scripts/ocr-smoke.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1079.0",
@@ -17,10 +18,12 @@
     "@fastify/multipart": "^9.4.0",
     "@feeforensics/agent": "0.1.0",
     "@feeforensics/shared": "0.1.0",
+    "@napi-rs/canvas": "^0.1.100",
     "dotenv": "^16.4.5",
     "fastify": "^5.1.0",
     "pdfjs-dist": "^4.10.38",
     "pg": "^8.22.0",
+    "tesseract.js": "^7.0.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
