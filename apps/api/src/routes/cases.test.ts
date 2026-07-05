@@ -249,6 +249,96 @@ describe("POST /api/cases — BYO upload → parse → run", () => {
     expect(res.json().error).toBe("case_not_found");
   });
 
+  it("accepts multiple support-pack files and merges them into one document", async () => {
+    app = await newServer();
+    const { body, contentType } = buildMultipart([
+      { name: "hma", filename: "hma.txt", contentType: "text/plain", content: demoFile("01_HMA_excerpt.txt") },
+      { name: "statement", filename: "os.csv", contentType: "text/csv", content: demoFile("02_operating_statement_june.csv") },
+      { name: "support_pack", filename: "inv1.csv", contentType: "text/csv", content: Buffer.from("Vendor,Amount\nAcme,100\n") },
+      { name: "support_pack", filename: "inv2.csv", contentType: "text/csv", content: Buffer.from("Vendor,Amount\nBeta,200\n") },
+    ]);
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/cases",
+      headers: { "content-type": contentType },
+      payload: body,
+    });
+    expect(created.statusCode).toBe(202);
+    const { caseId } = created.json();
+    expect(await waitUntilReady(app, caseId)).toBe("ready");
+
+    const res = await app.inject({ method: "GET", url: `/api/cases/${caseId}/documents` });
+    const support = res
+      .json()
+      .documents.find((d: { docId: string }) => d.docId === "doc_support_pack");
+    expect(support.content).toContain("Acme,100");
+    expect(support.content).toContain("Beta,200");
+    expect(support.name).toContain("2 files");
+  });
+
+  it("stores an extra document and surfaces it in the evidence viewer, out of the audit", async () => {
+    app = await newServer();
+    const { body, contentType } = buildMultipart([
+      { name: "hma", filename: "hma.txt", contentType: "text/plain", content: demoFile("01_HMA_excerpt.txt") },
+      { name: "statement", filename: "os.csv", contentType: "text/csv", content: demoFile("02_operating_statement_june.csv") },
+      { name: "extra_docs", filename: "sideletter.txt", contentType: "text/plain", content: Buffer.from("Owner never approved the software fee.") },
+    ]);
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/cases",
+      headers: { "content-type": contentType },
+      payload: body,
+    });
+    const { caseId } = created.json();
+    expect(await waitUntilReady(app, caseId)).toBe("ready");
+
+    const res = await app.inject({ method: "GET", url: `/api/cases/${caseId}/documents` });
+    const extra = res.json().documents.find((d: { name: string }) => d.name === "sideletter.txt");
+    expect(extra).toBeDefined();
+    expect(extra.content).toContain("never approved");
+    // The extra content must not reach the assembled audit input.
+    const assembled = JSON.stringify(res.json().documents.filter((d: { name: string }) => d.name !== "sideletter.txt"));
+    expect(assembled).not.toContain("never approved");
+  });
+
+  it("accepts a multipart upload larger than the global JSON bodyLimit", async () => {
+    app = await newServer();
+    // ~630KB statement: over the 256KB JSON bodyLimit, under the 10MB file cap.
+    // Proves the multipart route is gated by the per-file cap, not the JSON limit.
+    const bigCsv = "Line Item,Amount\nRooms,100000\n" + "Filler,1\n".repeat(70000);
+    const { body, contentType } = buildMultipart([
+      { name: "hma", filename: "hma.txt", contentType: "text/plain", content: demoFile("01_HMA_excerpt.txt") },
+      { name: "statement", filename: "os.csv", contentType: "text/csv", content: Buffer.from(bigCsv) },
+    ]);
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/cases",
+      headers: { "content-type": contentType },
+      payload: body,
+    });
+    expect(created.statusCode).toBe(202);
+    const { caseId } = created.json();
+    expect(await waitUntilReady(app, caseId)).toBe("ready");
+  });
+
+  it("413s a file over the 10MB cap", async () => {
+    app = await newServer();
+    // Just over the 10MB per-file limit — the multipart parser aborts the part.
+    const tooBig = Buffer.alloc(10 * 1024 * 1024 + 1024, 0x61);
+    const { body, contentType } = buildMultipart([
+      { name: "hma", filename: "big.txt", contentType: "text/plain", content: tooBig },
+      { name: "statement", filename: "os.csv", contentType: "text/csv", content: demoFile("02_operating_statement_june.csv") },
+    ]);
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/cases",
+      headers: { "content-type": contentType },
+      payload: body,
+    });
+    expect(res.statusCode).toBe(413);
+    expect(res.json().error).toBe("file_too_large");
+  });
+
   it("parses a SCANNED-PDF HMA through the OCR ladder and reaches status:ready", async () => {
     // A scanned PDF has pages but no text layer; the OCR ladder rasterizes each
     // such page and transcribes it. Here the whole ladder runs through the parse

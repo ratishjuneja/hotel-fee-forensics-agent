@@ -1,5 +1,5 @@
 import type { RunAuditInput } from "@feeforensics/agent";
-import type { AuditReport } from "@feeforensics/shared";
+import type { AuditReport, CaseSourceDocument } from "@feeforensics/shared";
 
 /** Async parse lifecycle for an uploaded (BYO) case. */
 export type ParseStatus = "parsing" | "ready" | "failed";
@@ -32,6 +32,13 @@ export interface CaseRecord {
    * run on replay. Absent until the owner answers at least one question.
    */
   humanAnswers?: Record<string, string>;
+  /**
+   * Decoded "Extra documents" the owner attached — stored with the case and
+   * surfaced verbatim in the evidence viewer, but deliberately NOT part of
+   * `assembledInput`, so they never reach the deterministic calculator. Absent
+   * when no extra documents were uploaded (or none were text/CSV-decodable).
+   */
+  extraDocuments?: CaseSourceDocument[];
 }
 
 /**
