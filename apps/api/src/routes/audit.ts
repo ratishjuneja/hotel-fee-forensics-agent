@@ -7,6 +7,7 @@ import {
 import type { AuditReport } from "@feeforensics/shared";
 import { DEMO_CASE_ID } from "../data/demoCase.js";
 import { loadDemoAuditInput } from "../data/demoInput.js";
+import type { CaseRepository } from "../data/caseRepository.js";
 
 interface CaseParams {
   caseId: string;
@@ -22,6 +23,12 @@ export interface AuditRouteOptions {
    * mid-demo inference hiccup never 500s.)
    */
   ranker: ChunkRanker | null;
+  /**
+   * Vultr-backed persistence (Managed PostgreSQL). `null` means it is not
+   * configured — the audit routes 503 rather than silently skipping the
+   * database or falling back to an in-memory store (see docs/Rules.md).
+   */
+  caseRepository: CaseRepository | null;
 }
 
 /** The API response keeps the mock-era contract shape and adds `warnings`. */
@@ -31,16 +38,20 @@ type AuditRouteResponse = Omit<RunAuditResult, "report">;
  * Real audit routes: POST run-audit executes the full agent pipeline
  * (packages/agent `runAudit`) over the preloaded demo documents, synchronously
  * in the request — the web client awaits the POST, exactly as it did with the
- * mock. The resulting report is kept in memory for GET /report. Only the
- * preloaded demo case is supported in the MVP.
+ * mock. The resulting report is persisted to Vultr Managed PostgreSQL (via the
+ * injected `CaseRepository`) for GET /report. Only the preloaded demo case is
+ * supported in the MVP.
  */
 export async function auditRoutes(
   app: FastifyInstance,
   options: AuditRouteOptions,
 ): Promise<void> {
-  // Latest completed report per case. In-memory is enough for the single-VM
-  // demo — a restart just means re-running the audit (no DB in the MVP).
-  const reports = new Map<string, AuditReport>();
+  const persistenceUnconfigured = {
+    error: "persistence_not_configured",
+    message:
+      "Vultr persistence is not configured. Set DATABASE_URL (Vultr Managed PostgreSQL, " +
+      "see .env.example) — there is no in-memory fallback.",
+  };
 
   // POST /api/cases/:caseId/run-audit
   // Body is intentionally not schema-validated: the client sends no body and
@@ -64,11 +75,15 @@ export async function auditRoutes(
             "VULTR_INFERENCE_BASE_URL and VULTR_INFERENCE_RETRIEVER_MODEL (see .env.example), then retry.",
         });
       }
+      if (options.caseRepository === null) {
+        // Fail before spending a Vultr call on a run we could not persist.
+        return reply.code(503).send(persistenceUnconfigured);
+      }
 
       const { report, ...response } = await runAudit(loadDemoAuditInput(), {
         ranker: options.ranker,
       });
-      reports.set(caseId, report);
+      await options.caseRepository.saveReport(caseId, report);
       if (response.warnings.length > 0) {
         request.log.warn(
           { caseId, warnings: response.warnings },
@@ -90,7 +105,10 @@ export async function auditRoutes(
           message: `Only the demo case (${DEMO_CASE_ID}) is available in the MVP.`,
         });
       }
-      const report = reports.get(caseId);
+      if (options.caseRepository === null) {
+        return reply.code(503).send(persistenceUnconfigured);
+      }
+      const report = await options.caseRepository.getReport(caseId);
       if (!report) {
         return reply.code(404).send({
           error: "report_not_ready",
