@@ -210,7 +210,10 @@ export function UploadForm() {
             </div>
           </div>
 
-          <fieldset className="space-y-3">
+          {/* min-w-0 overrides <fieldset>'s default min-inline-size:min-content,
+              which otherwise stops the column shrinking and makes long filenames
+              overflow into the right column. */}
+          <fieldset className="min-w-0 space-y-3">
             <legend className="mb-2 text-xs font-semibold uppercase tracking-wider text-subtle">
               Required
             </legend>
