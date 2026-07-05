@@ -58,9 +58,9 @@ export function EvidenceProvider({
 }: {
   children: React.ReactNode;
   /**
-   * Source-document registry citations resolve against. Omit for the bundled
-   * demo documents; the uploaded-case report passes a registry built from the
-   * parsed uploaded documents so citations open what the agent actually read.
+   * Source-document registry citations resolve against, built from the case's
+   * parsed uploaded documents so a citation opens what the agent actually read.
+   * Omit (or pass none) and citations render as plain, non-clickable pills.
    */
   documents?: Record<string, SourceDocument>;
 }) {
@@ -236,7 +236,7 @@ function EvidenceDrawer({
           )}
 
           <p className="mt-6 text-center text-xs text-slate-400">
-            Synthetic demo document · The Harborline Hotel
+            Rendered from your uploaded source document
           </p>
         </div>
       </aside>

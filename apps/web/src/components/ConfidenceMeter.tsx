@@ -2,45 +2,54 @@
 
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
+import type { ConfidenceComponent } from "@feeforensics/shared";
 import { cn, formatPercent } from "@/lib/utils";
 
 /**
  * Confidence shown as a number that expands to its heuristic components
- * (docs/AppFlow.md §7 / CLAUDE.md §confidence). The component values are the
- * authored ground truth for the Harborline case (data/demo/05_expected_answer.md):
- * a visible SUM to 96, where F3's missing owner approval is the only deduction
- * (evidence support 16/20). TODO(contract): once the API returns a
- * `confidenceBreakdown`, drive these from the response instead of this constant.
+ * (docs/AppFlow.md §7 / CLAUDE.md §confidence). The per-component breakdown is
+ * the report's real `confidenceBreakdown` — computed from the user's run, never
+ * seeded. When the run carries no breakdown, only the bare number + bar render;
+ * nothing is fabricated to fill the expansion.
  */
-const COMPONENTS = [
-  { label: "Contract clarity", points: 25, max: 25 },
-  { label: "Data completeness", points: 25, max: 25 },
-  { label: "Calculation match", points: 20, max: 20 },
-  { label: "Evidence support", points: 16, max: 20 },
-  { label: "Prior-month consistency", points: 10, max: 10 },
-];
-
-export function ConfidenceMeter({ confidence }: { confidence: number }) {
+export function ConfidenceMeter({
+  confidence,
+  breakdown,
+}: {
+  confidence: number;
+  breakdown?: ConfidenceComponent[];
+}) {
   const [open, setOpen] = useState(false);
   const pct = Math.round(confidence * 100);
+  const components = breakdown ?? [];
+  const expandable = components.length > 0;
+
+  const number = (
+    <span className="text-2xl font-bold text-slate-900">
+      {formatPercent(confidence)}
+    </span>
+  );
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 text-left"
-      >
-        <span className="text-2xl font-bold text-slate-900">
-          {formatPercent(confidence)}
-        </span>
-        <ChevronDown
-          className={cn(
-            "h-4 w-4 text-slate-400 transition",
-            open && "rotate-180",
-          )}
-        />
-      </button>
+      {expandable ? (
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="flex items-center gap-1.5 text-left"
+          aria-expanded={open}
+        >
+          {number}
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 text-slate-400 transition",
+              open && "rotate-180",
+            )}
+          />
+        </button>
+      ) : (
+        number
+      )}
       <div className="mt-1 h-2 w-40 overflow-hidden rounded-full bg-slate-200">
         <div
           className="h-full rounded-full bg-brand-500"
@@ -48,11 +57,12 @@ export function ConfidenceMeter({ confidence }: { confidence: number }) {
         />
       </div>
 
-      {open && (
+      {expandable && open && (
         <ul className="mt-3 space-y-1.5">
-          {COMPONENTS.map((c) => (
+          {components.map((c) => (
             <li
-              key={c.label}
+              key={c.key}
+              title={c.explanation}
               className="flex items-center justify-between gap-4 text-xs"
             >
               <span className="text-slate-600">{c.label}</span>
